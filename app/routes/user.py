@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from app.config.database import db
+from app.config.settings import settings
 from app.schemas.user import UserCreate, UserResponse, UserLogin, UserUpdate, UserRegisterResponse, Token
 from app.utils.security import hash_password, verify_password
 from app.models.user import User
@@ -10,22 +11,9 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 import bcrypt
-import os
-from dotenv import load_dotenv
 from pydantic import BaseModel
 
-# Load environment variables
-load_dotenv()
-
 router = APIRouter()
-
-# JWT configuration from environment variables
-SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
-
-if not SECRET_KEY:
-    raise ValueError("JWT_SECRET_KEY environment variable is not set")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/users/login")
 
@@ -85,7 +73,7 @@ async def register_user(user: UserCreate):
         user_data["_id"] = result.inserted_id
         
         # Create access token
-        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token_expires = timedelta(minutes=settings.jwt_access_token_expire_minutes)
         access_token = create_access_token(
             data={"sub": user.email}, expires_delta=access_token_expires
         )
@@ -143,7 +131,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         
         # Create token with role-based scope
         scopes = ["admin"] if user.get("role") == "admin" else ["user"]
-        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token_expires = timedelta(minutes=settings.jwt_access_token_expire_minutes)
         access_token = create_access_token(
             data={
                 "sub": user["email"],
@@ -155,7 +143,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         return Token(
             access_token=access_token,
             token_type="bearer",
-            expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convert to seconds
+            expires_in=settings.jwt_access_token_expire_minutes * 60,  # Convert to seconds
             scope=" ".join(scopes)
         )
     except HTTPException:

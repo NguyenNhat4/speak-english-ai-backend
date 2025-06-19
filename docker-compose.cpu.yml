@@ -13,11 +13,12 @@ services:
       - ./logs:/app/logs
     environment:
       - MONGODB_URL=${MONGODB_URL}
-      - DATABASE_NAME=${DATABASE_NAME:-speak_ai_db}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-mysecretkey}
-      - JWT_ALGORITHM=HS256
-      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
+      - DATABASE_NAME=${DATABASE_NAME}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - TTS_BACKEND_BASE_URL=${TTS_BACKEND_BASE_URL:-http://tts_kokoro:8880}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
