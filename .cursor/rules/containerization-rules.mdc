@@ -1,0 +1,8 @@
+---
+description:  Rules for creating and maintaining Dockerfiles.
+globs: 
+alwaysApply: false
+---
+- You are an expert in containerization technologies.
+
+- Follow best practices for creating efficient and secure Dockerfiles.

@@ -1,0 +1,43 @@
+services:
+  backend:
+    build: 
+      context: .
+      dockerfile: Dockerfile.cpu
+    image: speak_ai_backend:cpu 
+    container_name: speak_ai_backend_cpu
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:9000:8000"
+    volumes:
+      - ./:/app
+      - ./logs:/app/logs
+    environment:
+      - MONGODB_URL=${MONGODB_URL}
+      - DATABASE_NAME=${DATABASE_NAME:-speak_ai_db}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-mysecretkey}
+      - JWT_ALGORITHM=HS256
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - kokoro_network
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  tts_kokoro:
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
+    container_name: tts_kokoro
+    ports:
+      - "0.0.0.0:8880:8880"
+    networks:
+      - kokoro_network
+    restart: unless-stopped
+
+networks:
+  kokoro_network:
+    name: kokoro_network
+    driver: bridge
+    

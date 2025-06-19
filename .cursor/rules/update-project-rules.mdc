@@ -1,0 +1,17 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+before start making changes and after.
+update the status of tasks in  documents\refactor_sprint_backend.md  accordingly by the correct icon state defined as below.
+if a task is finished , update  its status to Completed.
+if you are working a task you should update it to in progress first before starting working on it. 
+with the state as the icon 
+
+- **Not Started**: ⬜
+- **In Progress**: 🟡
+- **Completed**: ✅
+- **Blocked**: 🔴
+
+- **Needs Review**: 🟠

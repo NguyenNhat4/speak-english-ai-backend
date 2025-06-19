@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+help me test  routes. remember to enter virtual environment in .venv first. the backend is running on docker container at port 9000.

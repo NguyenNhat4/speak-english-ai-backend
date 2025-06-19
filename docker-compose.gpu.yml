@@ -1,0 +1,57 @@
+services:
+  backend:
+    build: 
+      context: .
+      dockerfile: Dockerfile.gpu
+    container_name: speak_ai_backend
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:9000:8000"
+    volumes:
+      - ./:/app
+      - ./logs:/app/logs
+      - C:\Users\admin\.cache\whisper:/root/.cache/whisper 
+    environment:
+      - MONGODB_URL=${MONGODB_URL}
+      - DATABASE_NAME=${DATABASE_NAME:-speak_ai_db}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-mysecretkey}
+      - JWT_ALGORITHM=HS256
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - TTS_BACKEND_BASE_URL=http://tts_kokoro:8880      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver : nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - app_speak_ai_network
+    depends_on:
+      - tts_kokoro
+  tts_kokoro: # Service Kokoro TTS
+    image: ghcr.io/remsky/kokoro-fastapi-gpu:latest 
+    container_name: tts_kokoro_service
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:8880:8880"
+
+    deploy: 
+      resources:
+        reservations:
+          devices:
+            - driver : nvidia
+              count: 1 
+              capabilities: [gpu]
+    networks:
+      - app_speak_ai_network
+networks:
+  app_speak_ai_network:
+    driver: bridge
