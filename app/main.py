@@ -79,7 +79,7 @@ oauth2_scheme = OAuth2PasswordBearer(
 # Configure CORS middleware with centralized settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins if isinstance(settings.cors_origins, list) else ["*"],
+    allow_origins=settings.cors_origins if isinstance(settings.cors_origins, list) else [settings.cors_origins],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
