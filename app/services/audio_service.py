@@ -23,18 +23,15 @@ import whisper
 import torch
 from threading import Lock
 import google.generativeai as genai
-from dotenv import load_dotenv
 
 from app.repositories.audio_repository import AudioRepository
 from app.models.audio import Audio
 from app.utils.transcription_error_message import TranscriptionErrorMessages
 from app.config.database import db
-
-# Load environment variables
-load_dotenv()
+from app.config.settings import settings
 
 # Configure AI services
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+genai.configure(api_key=settings.get_gemini_api_key())
 gemini_model = genai.GenerativeModel("gemini-1.5-flash")
 
 logger = logging.getLogger(__name__)
