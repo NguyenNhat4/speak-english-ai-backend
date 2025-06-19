@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from fastapi import Depends, HTTPException, status, Security
 from fastapi.security import OAuth2PasswordBearer, SecurityScopes
-from jose import jwt, JWTError
+from jose import jwt, JWTError, ExpiredSignatureError
 from typing import Optional
 from app.config.database import db
 from app.config.settings import settings
@@ -82,15 +82,14 @@ async def get_current_user(
         # Get token scopes
         token_scopes = payload.get("scopes", [])
         
-    except JWTError as e:
-        if "Signature has expired" in str(e):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token has expired",
-                headers={"WWW-Authenticate": authenticate_value},
-            )
-        else:
-            raise credentials_exception
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": authenticate_value},
+        )
+    except JWTError:
+        raise credentials_exception
     
     # Find the user in the database
     user = db.users.find_one({"email": email})
