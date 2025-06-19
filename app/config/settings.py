@@ -6,7 +6,7 @@ using Pydantic BaseSettings with proper validation and security features.
 """
 
 import os
-from typing import Optional
+from typing import Optional, List, Union
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings
 from pathlib import Path
@@ -53,7 +53,7 @@ class ApplicationConfig(BaseSettings):
     # API Configuration
     api_host: str = Field(default="0.0.0.0", description="API host address")
     api_port: int = Field(default=8000, description="API port")
-    cors_origins: str = Field(default="*", description="CORS allowed origins (comma-separated)")
+    cors_origins: Union[str, List[str]] = Field(default="*", description="CORS allowed origins (comma-separated)")
     
     # Performance Configuration
     worker_count: int = Field(default=1, description="Number of worker processes")
