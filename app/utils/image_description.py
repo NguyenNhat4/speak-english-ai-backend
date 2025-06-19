@@ -1,10 +1,9 @@
 
-import os 
 from google import genai
+from app.config.settings import settings
 
-
-GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
-client = genai.Client(api_key=GOOGLE_API_KEY)
+# Configure Gemini AI client with centralized settings
+client = genai.Client(api_key=settings.get_gemini_api_key())
 
 prompt = """ Generate a concise and objective description of the provided image, 
 suitable for a TOEIC picture description test. The description should be spoken aloud 

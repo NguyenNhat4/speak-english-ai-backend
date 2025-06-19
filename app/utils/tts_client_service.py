@@ -2,14 +2,15 @@
 import httpx
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
-import os
 import random
 import logging
+from app.config.settings import settings
+
 logging.basicConfig(level=logging.INFO)
 
 logger = logging.getLogger(__name__)
-# Update to use the container name with correct port in the Docker network
-TTS_BACKEND_BASE_URL = os.getenv("TTS_BACKEND_BASE_URL", "http://tts_kokoro:8880")
+# Use centralized configuration for TTS backend URL
+TTS_BACKEND_BASE_URL = settings.tts_backend_base_url
 # Path for the TTS endpoint
 TTS_ENDPOINT_PATH = "/v1/audio/speech"
 TTS_MODEL_NAME = "kokoro"  # Default TTS model
