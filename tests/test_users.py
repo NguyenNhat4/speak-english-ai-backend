@@ -6,16 +6,13 @@ from bson import ObjectId
 import json
 from datetime import datetime, timedelta
 from jose import jwt
-from dotenv import load_dotenv
 
 # Add the backend directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Load environment variables
-load_dotenv()
-
 from app.main import app
 from app.config.database import db
+from app.config.settings import settings
 
 client = TestClient(app)
 
@@ -25,11 +22,6 @@ TEST_USER = {
     "email": "test@example.com",  # Valid email format
     "password": "Test123456"  # At least 8 characters, contains both letters and numbers
 }
-
-# JWT configuration
-SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
