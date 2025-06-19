@@ -7,12 +7,13 @@ from fastapi.openapi.models import SecurityScheme
 from fastapi.security import OAuth2PasswordBearer
 from typing import Dict
 from app.utils.event_handler import event_handler
+from app.config.settings import settings
 # Audio processing now handled by AudioService
 import logging
 from pathlib import Path
 
 app = FastAPI(
-    title="Speak AI API",
+    title=settings.app_name,
     description="""
     API for the Speak AI application.
     
@@ -28,7 +29,8 @@ app = FastAPI(
     * **user**: Basic access to own profile and conversations
     * **admin**: Full access including user management
     """,
-    version="1.0.0",
+    version=settings.app_version,
+    debug=settings.debug_mode,
     openapi_tags=[
         {
             "name": "users",
@@ -74,14 +76,14 @@ oauth2_scheme = OAuth2PasswordBearer(
     }
 )
 
-# Configure CORS middleware
+# Configure CORS middleware with centralized settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=settings.cors_origins if isinstance(settings.cors_origins, list) else [settings.cors_origins],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],  # Explicitly list allowed methods
-    allow_headers=["*"],  # Allows all headers including Authorization
-    expose_headers=["*"],  # Expose all headers to the client
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Include routers

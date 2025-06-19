@@ -1,22 +1,11 @@
 from datetime import datetime, timedelta
 from fastapi import Depends, HTTPException, status, Security
 from fastapi.security import OAuth2PasswordBearer, SecurityScopes
-from jose import jwt, JWTError
+from jose import jwt, JWTError, ExpiredSignatureError
 from typing import Optional
 from app.config.database import db
+from app.config.settings import settings
 from bson import ObjectId
-import os
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
-
-# JWT configuration
-SECRET_KEY = os.getenv("JWT_SECRET_KEY","asaqwoijgpaoiedrjgapoierjgggggggggpoaierjg")
-ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
-if not SECRET_KEY:
-    raise ValueError("JWT_SECRET_KEY environment variable is not set")
 
 # OAuth2 scheme for token authentication (points to the login endpoint)
 oauth2_scheme = OAuth2PasswordBearer(
@@ -48,9 +37,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.utcnow() + timedelta(minutes=settings.jwt_access_token_expire_minutes)
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, settings.get_secret_key(), algorithm=settings.jwt_algorithm)
 
 
 
@@ -85,7 +74,7 @@ async def get_current_user(
     
     try:
         # Decode the JWT token
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, settings.get_secret_key(), algorithms=[settings.jwt_algorithm])
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
@@ -93,7 +82,7 @@ async def get_current_user(
         # Get token scopes
         token_scopes = payload.get("scopes", [])
         
-    except jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",

@@ -16,3 +16,7 @@ __pycache__/
 *.pid
 .coverage
 .cursor
+
+# please dont remove this , i dont want to  commit below files and folders.
+documents/
+ACTION_PLAN.md
