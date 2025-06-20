@@ -29,6 +29,15 @@ class UserRepository(BaseRepository[User]):
         """Initialize the user repository."""
         super().__init__("users", User)
     
+    def find_by_id(self, document_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Find a user by their ID, ensuring they are not soft-deleted.
+        """
+        document = super().find_by_id(document_id)
+        if document and not document.get("is_deleted"):
+            return document
+        return None
+    
     def create_user(self, name: str, email: str, password_hash: str) -> Dict[str, Any]:
         """
         Create a new user.
@@ -69,7 +78,7 @@ class UserRepository(BaseRepository[User]):
             User document if found, None otherwise
         """
         try:
-            return self.find_one({"email": email})
+            return self.find_one({"email": email, "is_deleted": {"$ne": True}})
         except Exception as e:
             self.logger.error(f"Error getting user by email: {str(e)}")
             return None
@@ -134,7 +143,7 @@ class UserRepository(BaseRepository[User]):
             sort = [("created_at", -1)]
             
             return self.find_all(
-                filter_dict={},
+                filter_dict={"is_deleted": {"$ne": True}},
                 skip=skip,
                 limit=limit,
                 sort=sort

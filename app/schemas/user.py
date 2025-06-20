@@ -90,8 +90,6 @@ class UserLogin(BaseModel):
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     avatar_url: Optional[str] = None
-    is_deleted: Optional[bool] = None
-    deleted_at: Optional[datetime] = None
 
     @validator('name')
     def name_must_contain_space(cls, v):
