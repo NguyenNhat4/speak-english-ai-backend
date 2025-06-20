@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from bson import ObjectId
 
 from app.config.database import db
+from app.repositories.mistake_repository import MistakeRepository
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ class MistakeStatistics:
         mastered_count: int = 0,
         learning_count: int = 0,
         new_count: int = 0,
-        type_distribution: Dict[str, int] = None,
+        type_distribution: Optional[Dict[str, int]] = None,
         due_for_practice: int = 0,
         mastery_percentage: float = 0.0
     ):
@@ -53,6 +54,16 @@ class MistakeService:
     4. Retrieve mistakes for practice
     5. Update mistake status after practice
     """
+    
+    def __init__(self, mistake_repo: Optional[MistakeRepository] = None):
+        """
+        Initialize the mistake service with repository dependency.
+        
+        Args:
+            mistake_repo: MistakeRepository instance
+        """
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.mistake_repo = mistake_repo or MistakeRepository()
     
     def process_feedback_for_mistakes(
         self,
@@ -162,19 +173,8 @@ class MistakeService:
             List of unmastered mistakes
         """
         try:
-            # Fetch unmastered mistakes
-            cursor = db.mistakes.find({
-                "user_id": ObjectId(user_id),
-                "status": {"$ne": "MASTERED"}
-            }).sort("next_practice_date", 1)
-            
-            # Convert to list and format IDs
-            mistakes = list(cursor)
-            for mistake in mistakes:
-                mistake["_id"] = str(mistake["_id"])
-                mistake["user_id"] = str(mistake["user_id"])
-            
-            return mistakes
+            # Fetch unmastered mistakes using the repository
+            return self.mistake_repo.get_user_mistakes(user_id, status={"$ne": "MASTERED"})
             
         except Exception as e:
             logger.error(f"Error fetching unmastered mistakes: {str(e)}")
@@ -196,14 +196,8 @@ class MistakeService:
         now = datetime.utcnow()
         
         try:
-            # Fetch practice-due mistakes
-            cursor = db.mistakes.find({
-                "user_id": ObjectId(user_id),
-                "in_drill_queue": True,
-                "next_practice_date": {"$lte": now}
-            }).sort("next_practice_date", 1).limit(limit)
-            
-            mistakes = list(cursor)
+            # Fetch practice-due mistakes using the repository
+            mistakes = self.mistake_repo.get_mistakes_for_practice(user_id, limit)
             
             # Transform into practice exercises
             return [self._transform_to_practice_item(mistake) for mistake in mistakes]
@@ -226,20 +220,21 @@ class MistakeService:
         """
         try:
             now = datetime.utcnow()
+            user_object_id = ObjectId(user_id)
             
             # Get counts by status
-            total_count = db.mistakes.count_documents({"user_id": ObjectId(user_id)})
-            mastered_count = db.mistakes.count_documents({"user_id": ObjectId(user_id), "status": "MASTERED"})
-            learning_count = db.mistakes.count_documents({"user_id": ObjectId(user_id), "status": "LEARNING"})
-            new_count = db.mistakes.count_documents({"user_id": ObjectId(user_id), "status": "NEW"})
+            total_count = self.mistake_repo.count({"user_id": user_object_id})
+            mastered_count = self.mistake_repo.count({"user_id": user_object_id, "status": "MASTERED"})
+            learning_count = self.mistake_repo.count({"user_id": user_object_id, "status": "LEARNING"})
+            new_count = self.mistake_repo.count({"user_id": user_object_id, "status": "NEW"})
             
             # Get type distribution
-            grammar_count = db.mistakes.count_documents({"user_id": ObjectId(user_id), "type": "GRAMMAR"})
-            vocab_count = db.mistakes.count_documents({"user_id": ObjectId(user_id), "type": "VOCABULARY"})
+            grammar_count = self.mistake_repo.count({"user_id": user_object_id, "type": "GRAMMAR"})
+            vocab_count = self.mistake_repo.count({"user_id": user_object_id, "type": "VOCABULARY"})
             
             # Get due for practice
-            due_count = db.mistakes.count_documents({
-                "user_id": ObjectId(user_id), 
+            due_count = self.mistake_repo.count({
+                "user_id": user_object_id,
                 "next_practice_date": {"$lte": now},
                 "status": {"$ne": "MASTERED"}
             })
@@ -284,72 +279,19 @@ class MistakeService:
             Updated mistake information
         """
         try:
-            user_id = result.get("user_id")
             was_successful = result.get("was_successful", False)
-            user_answer = result.get("user_answer", "")
             
-            # Look up mistake
-            mistake = db.mistakes.find_one({
-                "_id": ObjectId(mistake_id),
-                "user_id": ObjectId(user_id)
-            })
-            
-            if not mistake:
-                return {"error": "Mistake not found"}
-            
-            # Update practice metrics
-            practice_count = mistake.get("practice_count", 0) + 1
-            success_count = mistake.get("success_count", 0)
-            
-            if was_successful:
-                success_count += 1
-            
-            # Calculate mastery level (0-100)
-            if practice_count > 0:
-                mastery_percentage = (success_count / practice_count) * 100
-            else:
-                mastery_percentage = 0
-            
-            # Determine status
-            status = mistake.get("status", "NEW")
-            is_learned = mistake.get("is_learned", False)
-            
-            if mastery_percentage >= 80 and practice_count >= 3:
-                status = "MASTERED"
-                is_learned = True
-            elif mastery_percentage >= 50:
-                status = "LEARNING"
-                is_learned = True
-                
-            # Calculate next practice date
-            next_practice_date = self._calculate_next_practice(practice_count, was_successful)
-            
-            # Update in database
-            db.mistakes.update_one(
-                {"_id": ObjectId(mistake_id)},
-                {
-                    "$set": {
-                        "practice_count": practice_count,
-                        "success_count": success_count,
-                        "last_practiced": datetime.utcnow(),
-                        "next_practice_date": next_practice_date,
-                        "mastery_level": mastery_percentage,
-                        "status": status,
-                        "is_learned": is_learned,
-                        "last_answer": user_answer
-                    }
-                }
-            )
-            
-            # Get updated mistake
-            updated_mistake = db.mistakes.find_one({"_id": ObjectId(mistake_id)})
-            
+            # Use the repository to update the practice result
+            updated_mistake = self.mistake_repo.update_practice_result(mistake_id, was_successful)
+
             if not updated_mistake:
-                raise ValueError(f"Updated mistake not found: {mistake_id}")
+                return {"error": "Mistake not found or failed to update"}
             
-            # Convert ObjectId to string
-            updated_mistake["_id"] = str(updated_mistake["_id"])
-            updated_mistake["user_id"] = str(updated_mistake["user_id"])
+            # The user_answer is not part of the repository logic, so we add it here if needed
+            user_answer = result.get("user_answer", "")
+            if user_answer:
+                self.mistake_repo.update(mistake_id, {"last_answer": user_answer})
+                updated_mistake["last_answer"] = user_answer
             
             # Add feedback
             updated_mistake["feedback"] = self._generate_practice_feedback(updated_mistake, was_successful)
@@ -480,57 +422,23 @@ class MistakeService:
     
     def _store_unique_mistakes(self, user_id: str, mistakes: List[Dict[str, Any]]) -> List[str]:
         """
-        Store mistakes while handling duplicates.
-        
-        This method matches the class diagram's storeUniqueMistakes method.
+        Create or update unique mistakes using the repository.
         
         Args:
             user_id: ID of the user
-            mistakes: List of mistakes to store
+            mistakes: List of mistake data
             
         Returns:
-            List of stored mistake IDs
+            List of IDs of stored mistakes
         """
         stored_ids = []
-        
         for mistake in mistakes:
-            # Skip empty mistakes
-            if not mistake.get("original_text") or not mistake.get("correction"):
-                continue
-                
-            # Check for existing similar mistake
-            existing = None
             try:
-                existing = db.mistakes.find_one({
-                    "user_id": ObjectId(user_id),
-                    "type": mistake["type"],
-                    "original_text": mistake["original_text"],
-                    "status": {"$ne": "MASTERED"}
-                })
+                # Use the repository to upsert the mistake
+                mistake_id = self.mistake_repo.upsert_mistake(mistake)
+                stored_ids.append(mistake_id)
             except Exception as e:
-                logger.error(f"Error finding existing mistake: {str(e)}")
-                continue
-            
-            if existing:
-                # Update existing mistake (increase frequency)
-                try:
-                    db.mistakes.update_one(
-                        {"_id": existing["_id"]},
-                        {
-                            "$inc": {"frequency": 1},
-                            "$set": {"last_occurred": datetime.utcnow()}
-                        }
-                    )
-                    stored_ids.append(str(existing["_id"]))
-                except Exception as e:
-                    logger.error(f"Error updating existing mistake: {str(e)}")
-            else:
-                # Insert new mistake
-                try:
-                    result = db.mistakes.insert_one(mistake)
-                    stored_ids.append(str(result.inserted_id))
-                except Exception as e:
-                    logger.error(f"Error inserting new mistake: {str(e)}")
+                logger.error(f"Error storing unique mistake: {str(e)}")
         
         return stored_ids
     
