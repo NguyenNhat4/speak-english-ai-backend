@@ -67,7 +67,7 @@ class MessageService:
         # Add the new user message to the history for the AI prompt
         messages.append(user_message_doc)
 
-        conversation_history_text = "\\n".join([f"{msg['sender']}: {msg['content']}" for msg in messages])
+        conversation_history_text = "\n".join([f"{msg['sender']}: {msg['content']}" for msg in messages])
         prompt = self.ai_service.build_conversation_prompt(conversation, conversation_history_text)
 
         ai_text = self.ai_service.generate_ai_response(prompt)
