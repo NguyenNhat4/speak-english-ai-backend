@@ -23,6 +23,7 @@ from app.schemas.audio import (
     LocalFileRequest
 )
 from app.utils.auth import get_current_user
+from app.utils.dependencies import get_audio_service
 # Audio processing functionality moved to AudioService
 from app.utils.transcription_error_message import TranscriptionErrorMessages
 from app.services.audio_service import AudioService
@@ -34,8 +35,8 @@ logger = logging.getLogger(__name__)
 UPLOAD_DIR = Path("app/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# Define valid audio file extensions
-VALID_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac']
+# Import file utilities
+from app.utils.file_utils import validate_audio_file, cleanup_temp_file
 
 # Create router instance
 router = APIRouter()
@@ -48,6 +49,7 @@ router = APIRouter()
 async def turn_to_text(
     audio_file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
+    audio_service: AudioService = Depends(get_audio_service),
 ):
     """
     Converts an uploaded audio file to text using speech recognition.
@@ -63,8 +65,6 @@ async def turn_to_text(
             - transcription: The transcribed text or an error message
             - success: Boolean indicating whether transcription was successful
     """
-    # Initialize audio service
-    audio_service = AudioService()
     user_id = str(current_user["_id"])
     
     try:
@@ -81,7 +81,7 @@ async def turn_to_text(
                 audio_id = audio_service.save_audio_file(audio_file, user_id)
                 
                 # Clean up temporary file
-                audio_service.cleanup_temp_file(temp_file_path)
+                cleanup_temp_file(temp_file_path)
                 
                 return {
                     "audio_id": audio_id,
@@ -92,7 +92,7 @@ async def turn_to_text(
             except Exception as e:
                 logger.error(f"Error saving audio after successful transcription: {str(e)}")
                 # Even if saving fails, return the transcription to the user
-                audio_service.cleanup_temp_file(temp_file_path)
+                cleanup_temp_file(temp_file_path)
                 return {
                     "audio_id": None,
                     "transcription": transcription,
@@ -101,7 +101,7 @@ async def turn_to_text(
                 }
         else:
             # Transcription failed or empty - clean up temp file and return error
-            audio_service.cleanup_temp_file(temp_file_path)
+            cleanup_temp_file(temp_file_path)
             return {
                 "audio_id": None,
                 "transcription": "No speech detected in audio file",
