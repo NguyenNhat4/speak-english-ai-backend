@@ -463,10 +463,12 @@ class AudioService:
             file_path = audio_record.get("file_path")
             file_size = self._get_file_size(file_path) if file_path else None
             created_at = audio_record.get('created_at')
+            user_id = audio_record.get("user_id")
+
             metadata = {
                 "id": audio_record.get("id"),
                 "filename": audio_record.get("filename"),
-                "user_id": str(audio_record.get("user_id")),
+                "user_id": str(user_id) if user_id else None,
                 "language": audio_record.get("language"),
                 "created_at": created_at.isoformat() if created_at else None,
                 "file_size": file_size
