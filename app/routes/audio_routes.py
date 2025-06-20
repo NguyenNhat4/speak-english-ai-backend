@@ -4,6 +4,7 @@ from typing import List
 from app.schemas.audio import AudioResponse
 from app.utils.auth import get_current_user
 from app.services.audio_service import AudioService
+from app.utils.dependencies import get_audio_service
 
 router = APIRouter(
     prefix="/audio",
@@ -14,7 +15,7 @@ router = APIRouter(
 def transcribe_audio(
     audio_file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
-    audio_service: AudioService = Depends(),
+    audio_service: AudioService = Depends(get_audio_service),
 ):
     """
     Converts an uploaded audio file to text, saves it, and returns the result.
@@ -25,7 +26,7 @@ def transcribe_audio(
 @router.get("/{audio_id}", response_model=AudioResponse)
 def get_audio(
     audio_id: str,
-    audio_service: AudioService = Depends()
+    audio_service: AudioService = Depends(get_audio_service)
 ):
     """
     Get audio file metadata.
@@ -36,7 +37,7 @@ def get_audio(
 def delete_audio(
     audio_id: str,
     current_user: dict = Depends(get_current_user),
-    audio_service: AudioService = Depends()
+    audio_service: AudioService = Depends(get_audio_service)
 ):
     """
     Delete an audio file and its record.
