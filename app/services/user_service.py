@@ -3,7 +3,7 @@ User Service for handling all user-related business logic.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 from fastapi import HTTPException, status
 
@@ -18,6 +18,12 @@ logger = logging.getLogger(__name__)
 class UserService:
     def __init__(self, user_repo: UserRepository = UserRepository()):
         self.user_repo = user_repo
+
+    def get_users(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Get all users.
+        """
+        return self.user_repo.get_all_users(skip=skip, limit=limit)
 
     def register_user(self, user_create: UserCreate) -> Dict[str, Any]:
         """
@@ -63,20 +69,38 @@ class UserService:
         """
         Get a user by their ID.
         """
-        return self.user_repo.find_by_id(user_id)
+        user = self.user_repo.find_by_id(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        return user
 
     def update_user_profile(self, user_id: str, user_update: UserUpdate) -> Optional[Dict[str, Any]]:
         """
         Update a user's profile.
         """
         update_data = user_update.dict(exclude_unset=True)
-        return self.user_repo.update_user(user_id, update_data)
+        updated_user = self.user_repo.update_user(user_id, update_data)
+        if not updated_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        return updated_user
 
     def delete_user(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
         Soft delete a user.
         """
-        return self.user_repo.delete_user(user_id)
+        deleted_user = self.user_repo.delete_user(user_id)
+        if not deleted_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        return deleted_user
 
     def create_auth_token(self, email: str, role: str = "user") -> Dict[str, Any]:
         """
