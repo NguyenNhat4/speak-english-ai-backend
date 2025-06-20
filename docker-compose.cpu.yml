@@ -6,24 +6,16 @@ services:
     image: speak_ai_backend:cpu 
     container_name: speak_ai_backend_cpu
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
       - "0.0.0.0:9000:8000"
     volumes:
       - ./:/app
       - ./logs:/app/logs
-    environment:
-      - MONGODB_URL=${MONGODB_URL}
-      - DATABASE_NAME=${DATABASE_NAME}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
-      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - TTS_BACKEND_BASE_URL=${TTS_BACKEND_BASE_URL:-http://tts_kokoro:8880}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
-      timeout: 10s
-      retries: 3
     networks:
       - kokoro_network
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

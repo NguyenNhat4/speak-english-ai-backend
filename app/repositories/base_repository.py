@@ -8,10 +8,14 @@ that can be inherited by specific repository classes.
 import logging
 from typing import Dict, Any, Optional, List, TypeVar, Generic, Type
 from datetime import datetime
-from bson import ObjectId
 from fastapi import HTTPException
 
 from app.config.database import db
+from app.utils.object_id import (
+    str_to_object_id,
+    mongo_doc_to_dict,
+    mongo_docs_to_dicts
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +52,7 @@ class BaseRepository(Generic[T]):
             data: Dictionary containing document data
             
         Returns:
-            Created document with generated ID
+            Created document with a string 'id' field
             
         Raises:
             HTTPException: If creation fails
@@ -69,7 +73,7 @@ class BaseRepository(Generic[T]):
             created_doc = self.collection.find_one({"_id": result.inserted_id})
             
             self.logger.info(f"Successfully created {self.collection_name} with ID: {result.inserted_id}")
-            return created_doc
+            return mongo_doc_to_dict(created_doc)
             
         except Exception as e:
             self.logger.error(f"Error creating {self.collection_name}: {str(e)}")
@@ -86,14 +90,14 @@ class BaseRepository(Generic[T]):
             document_id: String representation of the document ID
             
         Returns:
-            Document if found, None otherwise
+            Document if found (with string 'id'), None otherwise
             
         Raises:
             HTTPException: If ID is invalid or query fails
         """
         try:
-            # Convert string ID to ObjectId
-            obj_id = ObjectId(document_id)
+            # Convert string ID to ObjectId using utility
+            obj_id = str_to_object_id(document_id, self.collection_name)
             
             self.logger.debug(f"Finding {self.collection_name} by ID: {document_id}")
             
@@ -101,16 +105,18 @@ class BaseRepository(Generic[T]):
             
             if document:
                 self.logger.debug(f"Found {self.collection_name} with ID: {document_id}")
+                return mongo_doc_to_dict(document)
             else:
                 self.logger.debug(f"No {self.collection_name} found with ID: {document_id}")
+                return None
             
-            return document
-            
+        except HTTPException:
+            raise  # Re-raise validation errors from str_to_object_id
         except Exception as e:
             self.logger.error(f"Error finding {self.collection_name} by ID {document_id}: {str(e)}")
             raise HTTPException(
-                status_code=400,
-                detail=f"Invalid {self.collection_name} ID or query failed: {str(e)}"
+                status_code=500,
+                detail=f"Query failed for {self.collection_name} ID {document_id}: {str(e)}"
             )
     
     def find_one(self, filter_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -121,16 +127,17 @@ class BaseRepository(Generic[T]):
             filter_dict: MongoDB filter dictionary
             
         Returns:
-            A single document or None
+            A single document (with string 'id') or None
         """
         try:
             self.logger.debug(f"Finding one {self.collection_name} with filter: {filter_dict}")
             document = self.collection.find_one(filter_dict)
             if document:
                 self.logger.debug(f"Found {self.collection_name} with filter: {filter_dict}")
+                return mongo_doc_to_dict(document)
             else:
                 self.logger.debug(f"No {self.collection_name} found with filter: {filter_dict}")
-            return document
+                return None
         except Exception as e:
             self.logger.error(f"Error finding one {self.collection_name}: {str(e)}")
             raise HTTPException(
@@ -151,7 +158,7 @@ class BaseRepository(Generic[T]):
             sort: List of sort criteria tuples (field, direction)
             
         Returns:
-            List of matching documents
+            List of matching documents (with string 'id's)
             
         Raises:
             HTTPException: If query fails
@@ -178,7 +185,7 @@ class BaseRepository(Generic[T]):
             documents = list(cursor)
             
             self.logger.debug(f"Found {len(documents)} {self.collection_name} documents")
-            return documents
+            return mongo_docs_to_dicts(documents)
             
         except Exception as e:
             self.logger.error(f"Error finding {self.collection_name} documents: {str(e)}")
@@ -196,14 +203,14 @@ class BaseRepository(Generic[T]):
             update_data: Dictionary containing fields to update
             
         Returns:
-            Updated document if found, None otherwise
+            Updated document if found (with string 'id'), None otherwise
             
         Raises:
             HTTPException: If ID is invalid or update fails
         """
         try:
-            # Convert string ID to ObjectId
-            obj_id = ObjectId(document_id)
+            # Convert string ID to ObjectId using utility
+            obj_id = str_to_object_id(document_id, self.collection_name)
             
             # Add updated timestamp
             update_data["updated_at"] = datetime.utcnow()
@@ -224,8 +231,10 @@ class BaseRepository(Generic[T]):
             updated_doc = self.collection.find_one({"_id": obj_id})
             
             self.logger.info(f"Successfully updated {self.collection_name} with ID: {document_id}")
-            return updated_doc
+            return mongo_doc_to_dict(updated_doc)
             
+        except HTTPException:
+            raise  # Re-raise validation errors
         except Exception as e:
             self.logger.error(f"Error updating {self.collection_name} with ID {document_id}: {str(e)}")
             raise HTTPException(
@@ -247,8 +256,8 @@ class BaseRepository(Generic[T]):
             HTTPException: If ID is invalid or deletion fails
         """
         try:
-            # Convert string ID to ObjectId
-            obj_id = ObjectId(document_id)
+            # Convert string ID to ObjectId using utility
+            obj_id = str_to_object_id(document_id, self.collection_name)
             
             self.logger.info(f"Deleting {self.collection_name} with ID: {document_id}")
             
@@ -262,6 +271,8 @@ class BaseRepository(Generic[T]):
             self.logger.info(f"Successfully deleted {self.collection_name} with ID: {document_id}")
             return True
             
+        except HTTPException:
+            raise  # Re-raise validation errors
         except Exception as e:
             self.logger.error(f"Error deleting {self.collection_name} with ID {document_id}: {str(e)}")
             raise HTTPException(
@@ -309,7 +320,7 @@ class BaseRepository(Generic[T]):
             True if document exists, False otherwise
         """
         try:
-            document = self.collection.find_one(filter_dict)
+            document = self.collection.find_one(filter_dict, {"_id": 1})
             return document is not None
             
         except Exception as e:
