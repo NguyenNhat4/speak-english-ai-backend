@@ -29,7 +29,7 @@ class MistakeRepository(BaseRepository):
         super().__init__("mistakes", dict)
     
     def create_mistake(self, user_id: str, mistake_type: str, original_text: str, 
-                      correction: str, explanation: str, context: str = None) -> Dict[str, Any]:
+                      correction: str, explanation: str, context: Optional[str] = None) -> Dict[str, Any]:
         """
         Create a new mistake entry.
         
@@ -73,13 +73,13 @@ class MistakeRepository(BaseRepository):
                 detail=f"Failed to create mistake: {str(e)}"
             )
     
-    def get_user_mistakes(self, user_id: str, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_user_mistakes(self, user_id: str, status: Optional[str | Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
         Get all mistakes for a user, optionally filtered by status.
         
         Args:
             user_id: String representation of the user ID
-            status: Optional status filter
+            status: Optional status filter (can be a string or a query dict)
             
         Returns:
             List of user's mistakes
@@ -89,7 +89,10 @@ class MistakeRepository(BaseRepository):
             
             filter_dict = {"user_id": user_object_id}
             if status:
-                filter_dict["status"] = status
+                if isinstance(status, dict):
+                    filter_dict["status"] = status
+                else:
+                    filter_dict["status"] = status
             
             sort = [("created_at", -1)]
             
@@ -131,6 +134,53 @@ class MistakeRepository(BaseRepository):
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid user ID or query failed: {str(e)}"
+            )
+    
+    def upsert_mistake(self, mistake: Dict[str, Any]) -> str:
+        """
+        Create or update a mistake based on its content.
+        
+        If a similar mistake exists, it's updated; otherwise, a new one is created.
+        
+        Args:
+            mistake: Dictionary containing mistake data
+            
+        Returns:
+            The ID of the created or updated mistake
+        """
+        try:
+            # Look for an existing similar mistake
+            query = {
+                "user_id": mistake["user_id"],
+                "type": mistake["type"],
+                "original_text": mistake["original_text"],
+                "correction": mistake["correction"]
+            }
+            existing_mistake = self.find_one(query)
+            
+            if existing_mistake:
+                # Update existing mistake
+                update_data = {
+                    "$inc": {"frequency": 1},
+                    "$set": {
+                        "last_occurred": datetime.utcnow(),
+                        "explanation": mistake.get("explanation"),
+                        "context": mistake.get("context"),
+                        "situation_context": mistake.get("situation_context")
+                    }
+                }
+                self.update(existing_mistake["_id"], update_data)
+                return str(existing_mistake["_id"])
+            else:
+                # Create new mistake
+                new_mistake = self.create(mistake)
+                return str(new_mistake["_id"])
+                
+        except Exception as e:
+            self.logger.error(f"Error upserting mistake: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to upsert mistake: {str(e)}"
             )
     
     def update_practice_result(self, mistake_id: str, correct: bool) -> Optional[Dict[str, Any]]:
