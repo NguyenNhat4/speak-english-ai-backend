@@ -23,11 +23,21 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), user_service: UserSe
     return user_service.login_user(form_data.username, form_data.password)
 
 @router.get("/me", response_model=UserResponse)
-def get_user_profile(current_user: dict = Depends(get_current_user)):
+def get_user_profile(
+    current_user: dict = Depends(get_current_user),
+    user_service: UserService = Depends()
+):
     """
     Get current user's profile.
     """
-    return current_user
+    user_id = str(current_user["_id"])
+    user = user_service.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    return user
 
 @router.put("/me", response_model=UserResponse)
 def update_user_profile(user_update: UserUpdate, current_user: dict = Depends(get_current_user), user_service: UserService = Depends()):
