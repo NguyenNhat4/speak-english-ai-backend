@@ -7,13 +7,15 @@ and speech generation for the SpeakAI application.
 
 import logging
 from typing import Dict, Any, Optional, Generator
-from fastapi import HTTPException
+from fastapi import HTTPException, Depends
 from fastapi.responses import StreamingResponse
 
 from app.utils.tts_client_service import (
     get_speech_from_tts_service,
     pick_suitable_voice_name
 )
+from app.repositories.message_repository import MessageRepository
+from app.services.conversation_service import ConversationService
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +28,81 @@ class TTSService:
     and provides a clean interface for text-to-speech operations.
     """
     
-    def __init__(self):
+    def __init__(
+        self,
+        message_repo: MessageRepository = Depends(),
+        conversation_service: ConversationService = Depends()
+    ):
         """Initialize the TTS service."""
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.message_repo = message_repo
+        self.conversation_service = conversation_service
+    
+    async def get_speech_for_message(self, message_id: str) -> StreamingResponse:
+        """
+        Generates a speech audio stream for a given AI message.
+        """
+        message = self.message_repo.get_message_by_id(message_id)
+        if not message:
+            raise HTTPException(status_code=404, detail="Message not found")
+
+        if message.get("sender") != "ai":
+            raise HTTPException(status_code=400, detail="Speech can only be generated for AI messages")
+
+        ai_text = message.get("content")
+        if not ai_text:
+            raise HTTPException(status_code=400, detail="AI Message has no text content to synthesize")
+
+        conversation_id = str(message["conversation_id"])
+        conversation_context = self.conversation_service.get_conversation_context(conversation_id)
+        conversation_voice_type = conversation_context["conversation"].get("voice_type", "hm_omega")
+        
+        return await get_speech_from_tts_service(
+            text_to_speak=ai_text,
+            voice_name=conversation_voice_type,
+            speed=1.3
+        )
+
+    async def synthesize_demo_speech(self, text: str) -> StreamingResponse:
+        """
+        Generates a demo speech stream with a default voice.
+        """
+        return await get_speech_from_tts_service(
+            text_to_speak=text,
+            voice_name="hm_omega", # Default demo voice
+            speed=1.3
+        )
+
+    def get_voice_context(self, message_id: str) -> dict:
+        """
+        Retrieves voice context (voice type and latest AI message) for a conversation.
+        """
+        message = self.message_repo.get_message_by_id(message_id)
+        if not message:
+            raise HTTPException(status_code=404, detail="Message not found")
+
+        conversation_id = str(message["conversation_id"])
+        conversation_context = self.conversation_service.get_conversation_context(conversation_id)
+        conversation = conversation_context["conversation"]
+        messages = conversation_context["messages"]
+        
+        voice_type = conversation.get("voice_type", "hm_omega")
+        
+        ai_messages = [msg for msg in messages if msg.get("sender") == "ai"]
+        latest_ai_message_data = None
+        
+        if ai_messages:
+            latest_msg = ai_messages[-1]
+            latest_ai_message_data = {
+                "id": str(latest_msg["_id"]),
+                "content": latest_msg.get("content", ""),
+                "timestamp": latest_msg.get("timestamp")
+            }
+        
+        return {
+            "voice_type": voice_type,
+            "latest_ai_message": latest_ai_message_data,
+        }
     
     async def generate_speech_streaming(
         self,

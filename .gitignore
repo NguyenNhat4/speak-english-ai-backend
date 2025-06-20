@@ -18,6 +18,6 @@ __pycache__/
 .cursor
 
 # please dont remove this , i dont want to  commit below files and folders.
-.cursor/
+.cursor/rules/
 documents/
 ACTION_PLAN.md

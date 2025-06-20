@@ -1,4 +1,4 @@
-from app.routes.user import router as user_controller
+from app.routes.user_routes import router as user_controller
 from app.routes.conversation_routes import router as conversation_controller
 from app.routes.audio_routes import router as audio_controller
 from app.routes.message_routes import router as message_controller
