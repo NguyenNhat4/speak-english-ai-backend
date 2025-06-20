@@ -10,7 +10,6 @@ from .conversation_repository import ConversationRepository
 from .message_repository import MessageRepository
 from .user_repository import UserRepository
 from .feedback_repository import FeedbackRepository
-from .mistake_repository import MistakeRepository
 from .audio_repository import AudioRepository
 
 __all__ = [
@@ -19,6 +18,5 @@ __all__ = [
     "MessageRepository",
     "UserRepository",
     "FeedbackRepository",
-    "MistakeRepository",
     "AudioRepository",
 ] 
