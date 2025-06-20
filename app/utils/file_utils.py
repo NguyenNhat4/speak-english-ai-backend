@@ -166,6 +166,8 @@ def create_temp_file(file: UploadFile, suffix: Optional[str] = None) -> Path:
     Returns:
         Path to the temporary file
     """
+    import os
+    
     if suffix is None:
         suffix = Path(file.filename or "").suffix or ".tmp"
     
@@ -174,17 +176,22 @@ def create_temp_file(file: UploadFile, suffix: Optional[str] = None) -> Path:
     temp_file_path = Path(temp_path)
     
     try:
-        # Write uploaded file content to temp file
-        with open(temp_fd, 'wb') as temp_file:
+        # Write uploaded file content to temp file using the file descriptor
+        with os.fdopen(temp_fd, 'wb') as temp_file:
             shutil.copyfileobj(file.file, temp_file)
+        # temp_fd is automatically closed when the context manager exits
         
         logger.debug(f"Created temporary file: {temp_file_path}")
         return temp_file_path
         
     except Exception as e:
-        # Clean up on error
+        # Clean up file descriptor and temp file on error
         try:
-            temp_file_path.unlink()
+            os.close(temp_fd)  # Close the file descriptor if still open
+        except:
+            pass
+        try:
+            temp_file_path.unlink()  # Remove the temp file
         except:
             pass
         raise e
