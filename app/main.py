@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends
 from fastapi.staticfiles import StaticFiles
-from app.routes import user, image_description
+from app.routes import user_routes, image_description
 from app.routes import conversation_routes, audio_routes, message_routes, tts_routes
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.models import SecurityScheme
@@ -88,7 +88,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(
-    user.router,
+    user_routes.router,
     prefix="/api/users",
     tags=["users"],
     responses={401: {"description": "Unauthorized"}}
