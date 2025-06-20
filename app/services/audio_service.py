@@ -26,9 +26,7 @@ from threading import Lock
 from app.repositories.audio_repository import AudioRepository
 from app.models.audio import Audio
 from app.utils.transcription_error_message import TranscriptionErrorMessages
-from app.config.database import db
 from app.config.settings import settings
-from app.utils.gemini import gemini_model
 
 logger = logging.getLogger(__name__)
 
@@ -253,154 +251,80 @@ class AudioService:
                 status_code=500,
                 detail=f"Audio transcription failed: {str(e)}"
             )
-    
+
     def transcribe_from_upload(self, audio_file: UploadFile, language_code: str = "en-US") -> Tuple[str, Optional[Path]]:
         """
-        Create a temporary file from upload and transcribe it without storing in DB first.
-        
-        This optimized method creates a temporary file, transcribes it, and returns the
-        transcription without adding it to the database until we know transcription was successful.
-        
-        Args:
-            audio_file: The audio file from the upload
-            language_code: Language code for transcription (default: en-US)
-            
-        Returns:
-            A tuple containing (transcription text, temporary file path)
-            
-        Raises:
-            Exception: If transcription fails
+        Handles transcription from an UploadFile object, including temp file management.
         """
+        temp_file_path = None
         try:
-            # Create a temporary file with the same extension as the uploaded file
-            filename = audio_file.filename or "unknown_file"
-            _, ext = os.path.splitext(filename)
-            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_file:
-                # Copy uploaded file to temporary file
-                shutil.copyfileobj(audio_file.file, tmp_file)
-                tmp_path = Path(tmp_file.name)
+            # Use a temporary file for processing
+            temp_file_path = create_temp_file(audio_file)
             
-            # Make sure we reset the file pointer for potential future use
-            audio_file.file.seek(0)
+            transcription = self.transcribe_audio_file(temp_file_path, language_code)
             
-            # Transcribe the temporary file
-            transcription = self.transcribe_audio_file(tmp_path, language_code)
-            
-            # Return both the transcription and the path to the temporary file
-            return transcription, tmp_path
-            
+            return transcription, temp_file_path
+        
         except Exception as e:
-            logger.error(f"Error transcribing from upload: {str(e)}")
-            # Return the error message and None for the file path
-            return self._try_fallback_transcription(Path(""), language_code), None
-    
+            # Log the exception and re-raise to be handled by the calling method
+            self.logger.error(f"Error during transcription from upload: {str(e)}")
+            raise
+            
+        finally:
+            # This ensures cleanup happens if transcribe_audio_file fails,
+            # but the caller of transcribe_audio is now responsible for cleanup on success.
+            # This is a change in design to allow the caller to use the temp file path.
+            pass
+
     def transcribe_audio_file(self, audio_file: Path, language_code: str = "en-US", use_whisper: bool = True) -> str:
         """
-        Transcribe audio file to text using the appropriate service.
-        
-        Args:
-            audio_file: Path to the audio file to transcribe
-            language_code: Language code for transcription (default: en-US)
-            use_whisper: Whether to use Whisper model (default: True)
-            
-        Returns:
-            Transcription text
-            
-        Raises:
-            Exception: If transcription fails
+        Transcribes an audio file using either local or Whisper transcription.
         """
         try:
-            transcription_text = ""
-            if not use_whisper:
-                # Use local transcription service
-                transcription_text = self.transcribe_audio_local(audio_file, language_code)
+            if use_whisper:
+                transcription = self.transcribe_audio_with_whisper(audio_file, language_code)
             else:
-                transcription_text = self.transcribe_audio_with_whisper(audio_file, language_code)
-                
-            return transcription_text if transcription_text and len(transcription_text) > 0 else TranscriptionErrorMessages.EMPTY_TRANSCRIPTION.value
+                transcription = self.transcribe_audio_local(audio_file, language_code)
             
+            if not transcription or not transcription.strip():
+                return TranscriptionErrorMessages.EMPTY_TRANSCRIPTION.value
+                
+            return transcription
+
         except Exception as e:
-            logger.error(f"Error in audio transcription: {str(e)}")
+            self.logger.error(f"Transcription failed for {audio_file}: {e}")
             return self._try_fallback_transcription(audio_file, language_code)
-    
+
     def transcribe_audio_local(self, audio_file_path: Path, language_code: str = "en-US") -> str:
         """
-        Transcribe audio using local SpeechRecognition library.
-        
-        This function converts spoken words in an audio file into text using Google's
-        Web Speech API through the SpeechRecognition library. It handles various exceptions
-        that may occur during the transcription process.
-        
-        Args:
-            audio_file_path: Path to the audio file
-            language_code: Language code (default: en-US)
-            
-        Returns:
-            Transcription text
+        Placeholder for local transcription. 
+        Currently uses Whisper as a fallback.
         """
-        try:
-            import speech_recognition as sr
-            
-            # Initialize recognizer
-            r = sr.Recognizer()
-            
-            # Load audio file
-            with sr.AudioFile(str(audio_file_path)) as source:
-                # Read the audio data
-                audio_data = r.record(source)
-                
-                # Recognize speech using Google Web Speech API (free)
-                text = r.recognize_google(audio_data, language=language_code)
-                
-                return text
+        # This is where you might implement an alternative, non-GPU transcription method.
+        # For now, it defaults to Whisper.
+        self.logger.info("Using local transcription (currently Whisper-based)")
+        return self.transcribe_audio_with_whisper(audio_file_path, language_code)
         
-        except ImportError:
-            logger.error("SpeechRecognition library not installed. Please install it with: pip install SpeechRecognition")
-            return TranscriptionErrorMessages.DEFAULT_FALLBACK_ERROR.value
-        except sr.UnknownValueError:
-            logger.error("Speech recognition could not understand audio")
-            return TranscriptionErrorMessages.EMPTY_TRANSCRIPTION.value
-        except sr.RequestError as e:
-            logger.error(f"Could not request results from Google Web Speech API; {str(e)}")
-            return TranscriptionErrorMessages.DEFAULT_FALLBACK_ERROR.value
-        except Exception as e:
-            logger.error(f"Error in local transcription: {str(e)}")
-            return TranscriptionErrorMessages.DEFAULT_FALLBACK_ERROR.value
-    
     def transcribe_audio_with_whisper(self, audio_file_path: Path, language_code: str = "en-US") -> str:
         """
-        Transcribe audio using Whisper model.
-        
-        This function uses the Whisper model to transcribe spoken words in an audio file into text.
-        It handles various exceptions that may occur during the transcription process.
-        
-        Args:
-            audio_file_path: Path to the audio file
-            language_code: Language code (default: en-US)
-            
-        Returns:
-            Transcription text
+        Transcribes audio using the Whisper model.
         """
         try:
-            logger.info(f"Model used: {model_pool.model_size}")
-           
-            # Convert language code
-            if 'us' in language_code.lower():
-                language_code = "en"
-            else:
-                language_code = "vi"
-                
-            transcribe_options = {
-                "language": language_code,
-                "task": "transcribe",
-            }
+            start_time = time.time()
+            
+            # Perform transcription
             result = loaded_model.transcribe(str(audio_file_path), language=language_code)
+            
+            end_time = time.time()
+            self.logger.info(f"Whisper transcription took {end_time - start_time:.2f} seconds")
+            
             return result["text"]
             
         except Exception as e:
-            logger.error(f"Error in Whisper transcription: {str(e)}")
-            return TranscriptionErrorMessages.DEFAULT_FALLBACK_ERROR.value
-    
+            self.logger.error(f"Whis_per transcription failed: {e}")
+            # The calling method will handle the fallback
+            raise
+
     def _try_fallback_transcription(self, audio_file: Path, language_code: str = "en-US") -> str:
         """
         Attempt to transcribe using alternative methods when the primary method fails.
@@ -439,83 +363,7 @@ class AudioService:
         
         # If all else fails, return a default message
         return TranscriptionErrorMessages.DEFAULT_FALLBACK_ERROR.value
-    
-    # =============================================================================
-    # FEEDBACK AND AI PROCESSING METHODS
-    # =============================================================================
-    
-    
-    def process_audio_for_feedback(
-        self, 
-        transcription: str, 
-        user_id: str, 
-        conversation_id: str,
-        audio_id: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """
-        DEPRECATED: This method is outdated. Use FeedbackService to generate feedback.
-        Process audio transcription for feedback generation.
-        
-        Args:
-            transcription (str): The transcribed text from audio
-            user_id (str): The ID of the user
-            conversation_id (str): The ID of the conversation
-            audio_id (Optional[str]): The ID of the audio record
-            
-        Returns:
-            Dict[str, Any]: Processing results and feedback data
-            
-        Raises:
-            HTTPException: If processing fails
-        """
-        try:
-            # Validate inputs
-            if not transcription or not transcription.strip():
-                raise HTTPException(
-                    status_code=400,
-                    detail="Empty transcription provided"
-                )
-            
-            if not ObjectId.is_valid(user_id):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid user ID format"
-                )
-            
-            if not ObjectId.is_valid(conversation_id):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid conversation ID format"
-                )
-            
-            # TODO: Refactor or remove this method.
-            # The feedback generation logic has been moved to FeedbackService.
-            # feedback_data, _ = self.generate_feedback(transcription)
-            feedback_data = {} # Placeholder
-            
-            # Prepare processing results
-            processing_results = {
-                "transcription": transcription,
-                "user_id": user_id,
-                "conversation_id": conversation_id,
-                "audio_id": audio_id,
-                "feedback": feedback_data,
-                "processed_at": datetime.utcnow().isoformat(),
-                "status": "success"
-            }
-            
-            self.logger.info(f"Successfully processed audio feedback for user {user_id}")
-            return processing_results
-            
-        except HTTPException:
-            raise
-        except Exception as e:
-            self.logger.error(f"Failed to process audio for feedback: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Audio feedback processing failed: {str(e)}"
-            )
-    
+
     def get_audio_metadata(self, audio_id: str) -> Dict[str, Any]:
         """
         Get metadata for an audio file.
@@ -561,7 +409,7 @@ class AudioService:
                 status_code=500,
                 detail="Failed to retrieve audio metadata"
             )
-    
+
     def _get_file_size(self, file_path: str) -> Optional[int]:
         """Get file size in bytes."""
         try:
