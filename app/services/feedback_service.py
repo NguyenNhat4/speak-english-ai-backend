@@ -25,8 +25,15 @@ logger = logging.getLogger(__name__)
 # Constants
 UPLOAD_DIR = Path("app/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-VALID_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac']
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+# Import file utilities
+from app.utils.file_utils import (
+    validate_audio_file,
+    save_uploaded_file,
+    cleanup_temp_file,
+    sanitize_filename,
+    UPLOAD_DIR
+)
+from app.utils.object_id import str_to_object_id, mongo_doc_to_dict
 MAX_CONTEXT_MESSAGES = 10
 
 
@@ -292,51 +299,17 @@ class FeedbackService:
     
     def _validate_audio_file(self, file: UploadFile) -> None:
         """Validate audio file before saving."""
-        if not file.filename:
-            raise FeedbackServiceError("Filename is required")
-        
-        # Check file extension
-        file_extension = Path(file.filename).suffix.lower()
-        if file_extension not in VALID_AUDIO_EXTENSIONS:
-            raise FeedbackServiceError(
-                f"Invalid file type. Supported formats: {', '.join(VALID_AUDIO_EXTENSIONS)}"
-            )
-        
-        # Check file size (if available)
-        if hasattr(file, 'size') and file.size and file.size > MAX_FILE_SIZE:
-            raise FeedbackServiceError(f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB")
+        try:
+            validate_audio_file(file)
+        except HTTPException as e:
+            raise FeedbackServiceError(str(e.detail))
     
     async def _save_file_to_disk(self, file: UploadFile, user_id: str) -> Path:
         """Save file to disk with proper error handling."""
         try:
-            # Create user directory
-            user_dir = UPLOAD_DIR / str(user_id)
-            user_dir.mkdir(exist_ok=True)
-            
-            # Generate unique filename
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # Include milliseconds
-            filename = file.filename or "audio_file"
-            safe_filename = self._sanitize_filename(f"{timestamp}_{filename}")
-            file_path = user_dir / safe_filename
-            
-            # Save the file
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-            
-            return file_path
-            
+            return save_uploaded_file(file, user_id, "feedback")
         except Exception as e:
             raise FeedbackServiceError(f"Failed to save file to disk: {e}")
-    
-    def _sanitize_filename(self, filename: str) -> str:
-        """Sanitize filename for safe storage."""
-        # Replace spaces and unsafe characters
-        safe_chars = "-_.() abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-        sanitized = "".join(c if c in safe_chars else "_" for c in filename)
-        # Replace multiple underscores/spaces with single underscore
-        while "__" in sanitized or "  " in sanitized:
-            sanitized = sanitized.replace("__", "_").replace("  ", " ")
-        return sanitized.replace(" ", "_").strip("_")
 
     def _store_feedback(
         self, 
