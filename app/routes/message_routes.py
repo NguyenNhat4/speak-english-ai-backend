@@ -7,6 +7,7 @@ from app.services.message_service import MessageService
 from app.services.feedback_service import FeedbackService
 from app.repositories.message_repository import MessageRepository
 from app.repositories.feedback_repository import FeedbackRepository
+from app.utils.dependencies import get_message_service, get_feedback_service, get_message_repository, get_feedback_repository
 
 router = APIRouter(
     tags=["messages"]
@@ -18,7 +19,7 @@ async def add_message_and_get_response(
     audio_id: str,
     current_user: dict = Depends(get_current_user),
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    message_service: MessageService = Depends()
+    message_service: MessageService = Depends(get_message_service)
 ):
     """
     Process a user's spoken message, add it to the conversation, and get an AI response.
@@ -32,7 +33,7 @@ async def add_message_and_get_response(
 @router.get("/conversations/{conversation_id}/messages", response_model=List[MessageResponse])
 def get_conversation_messages(
     conversation_id: str,
-    message_service: MessageService = Depends()
+    message_service: MessageService = Depends(get_message_service)
 ):
     """
     Get all messages for a specific conversation.
@@ -42,7 +43,7 @@ def get_conversation_messages(
 @router.get("/messages/{message_id}", response_model=MessageResponse)
 def get_message(
     message_id: str,
-    message_service: MessageService = Depends()
+    message_service: MessageService = Depends(get_message_service)
 ):
     """
     Get a specific message by its ID.
@@ -52,7 +53,7 @@ def get_message(
 @router.delete("/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_message(
     message_id: str,
-    message_service: MessageService = Depends()
+    message_service: MessageService = Depends(get_message_service)
 ):
     """
     Delete a message.
@@ -63,8 +64,8 @@ def delete_message(
 @router.get("/messages/{message_id}/feedback", response_model=dict)
 def get_message_feedback(
     message_id: str,
-    message_repo: MessageRepository = Depends(),
-    feedback_repo: FeedbackRepository = Depends()
+    message_repo: MessageRepository = Depends(get_message_repository),
+    feedback_repo: FeedbackRepository = Depends(get_feedback_repository)
 ):
     """
     Get user-friendly feedback for a specific message.
