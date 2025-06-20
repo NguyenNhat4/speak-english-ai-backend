@@ -29,7 +29,7 @@ class ConversationService:
     creation, retrieval, validation, and management.
     """
     
-    def __init__(self, conversation_repo: ConversationRepository = None, message_repo: MessageRepository = None):
+    def __init__(self, conversation_repo: Optional[ConversationRepository] = None, message_repo: Optional[MessageRepository] = None):
         """
         Initialize the conversation service with repository dependencies.
         
@@ -80,6 +80,9 @@ class ConversationService:
             
             # Prepare response data
             conversation_data = self._format_conversation_response(ObjectId(conversation_id))
+            if not conversation_data:
+                raise HTTPException(status_code=404, detail="Failed to format conversation response")
+
             # Convert to message object for formatting
             message_obj = Message(
                 conversation_id=ObjectId(conversation_id),
@@ -118,14 +121,7 @@ class ConversationService:
             HTTPException: If conversation not found or retrieval fails
         """
         try:
-            # Validate and convert conversation ID
-            if not ObjectId.is_valid(conversation_id):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid conversation ID format"
-                )
-            
-            # Fetch conversation using repository
+            # The repository now handles ObjectId validation
             conversation = self.conversation_repo.get_conversation_by_id(conversation_id)
             if not conversation:
                 raise HTTPException(
@@ -241,13 +237,7 @@ class ConversationService:
             HTTPException: If retrieval fails
         """
         try:
-            if not ObjectId.is_valid(user_id):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid user ID format"
-                )
-            
-            # Use repository to get user conversations
+            # The repository now handles ObjectId validation
             conversations = self.conversation_repo.get_user_conversations(
                 user_id=user_id,
                 limit=limit
@@ -273,21 +263,30 @@ class ConversationService:
                 detail=f"Failed to retrieve conversations: {str(e)}"
             )
     
-    def _format_conversation_response(self, conversation_id: ObjectId) -> Dict[str, Any]:
+    def _format_conversation_response(self, conversation_id: ObjectId) -> Optional[Dict[str, Any]]:
         """
-        Format conversation data for API response.
+        Format a conversation for API response.
         
         Args:
-            conversation_id (ObjectId): The conversation ID
+            conversation_id: The ID of the conversation
             
         Returns:
-            Dict[str, Any]: Formatted conversation data
+            Formatted conversation data or None
         """
         conversation = self.conversation_repo.get_conversation_by_id(str(conversation_id))
-        conversation["id"] = str(conversation["_id"])
-        conversation["user_id"] = str(conversation["user_id"])
-        del conversation["_id"]
-        return conversation
+        if not conversation:
+            return None
+            
+        return {
+            "id": str(conversation["_id"]),
+            "user_id": str(conversation["user_id"]),
+            "user_role": conversation["user_role"],
+            "ai_role": conversation["ai_role"],
+            "situation": conversation["situation"],
+            "started_at": conversation["started_at"].isoformat(),
+            "ended_at": conversation["ended_at"].isoformat() if conversation.get("ended_at") else None,
+            "voice_type": conversation.get("voice_type")
+        }
     
     def _format_message_response(
         self, 
@@ -304,8 +303,10 @@ class ConversationService:
         Returns:
             Dict[str, Any]: Formatted message data
         """
-        message_dict = message.to_dict()
-        message_dict["id"] = str(message_dict["_id"])
-        message_dict["conversation_id"] = str(conversation_id)
-        del message_dict["_id"]
-        return message_dict 
+        return {
+            "id": str(message._id),
+            "conversation_id": str(conversation_id),
+            "sender": message.sender,
+            "content": message.content,
+            "timestamp": message.timestamp.isoformat()
+        } 
