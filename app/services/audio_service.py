@@ -49,7 +49,7 @@ class ModelPool:
     """Manages Whisper model instances for audio transcription."""
     
     def __init__(self):
-        self.model_size = "tiny"
+        self.model_size = "large-v3-turbo"
   
     def get_model(self):
         device = self.get_device()
@@ -121,7 +121,9 @@ class AudioService:
             
             # Save the file using internal method
             file_path, audio_model = self._save_audio_file_internal(file, user_id)
-            audio_id = str(audio_model._id)
+            
+            # The audio_id is now part of the returned model from the repo
+            audio_id = str(audio_model['_id'])
             
             self.logger.info(f"Successfully saved audio file for user {user_id}: {audio_id}")
             return audio_id
@@ -133,7 +135,7 @@ class AudioService:
                 detail=f"Failed to save audio file: {str(e)}"
             )
     
-    def _save_audio_file_internal(self, audio_file: UploadFile, user_id: str) -> Tuple[str, Audio]:
+    def _save_audio_file_internal(self, audio_file: UploadFile, user_id: str) -> Tuple[str, Dict[str, Any]]:
         """
         Internal method to save an audio file to disk and create a database record.
         
@@ -142,16 +144,13 @@ class AudioService:
             user_id: ID of the user who owns the file
             
         Returns:
-            Tuple containing the file path and Audio model
+            Tuple containing the file path and the created audio document from the repository.
             
         Raises:
             Exception: If file saving fails
         """
-        # Convert string user_id to ObjectId
-        user_object_id = ObjectId(user_id)
-        
         # Create user directory if it doesn't exist
-        user_dir = UPLOAD_DIR / str(user_id)
+        user_dir = self.upload_dir / str(user_id)
         user_dir.mkdir(exist_ok=True)
         
         # Generate unique filename
@@ -164,38 +163,15 @@ class AudioService:
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(audio_file.file, buffer)
         
-        # Create audio record
-        new_audio = Audio(
-            user_id=user_object_id,
+        # Create audio record via the repository
+        created_audio = self.audio_repo.create_audio(
+            user_id=user_id,
             filename=audio_file.filename,
             file_path=str(file_path),
             language="en-US"  # Default language
         )
         
-        # Insert into database
-        result = db.audio.insert_one(new_audio.to_dict())
-        
-        # Fetch the inserted audio
-        created_audio = db.audio.find_one({"_id": result.inserted_id})
-        
-        # Store the _id value
-        audio_id = created_audio["_id"]
-        
-        # Get the arguments that Audio.__init__ accepts
-        audio_init_params = inspect.signature(Audio.__init__).parameters
-        
-        # Filter created_audio to only include fields accepted by Audio constructor
-        filtered_audio_data = {}
-        for key, value in created_audio.items():
-            # Skip _id and created_at, which are automatically set in the constructor
-            if key in audio_init_params and key not in ["_id", "created_at"]:
-                filtered_audio_data[key] = value
-        
-        # Create Audio instance with filtered data
-        audio_instance = Audio(**filtered_audio_data)
-        audio_instance._id = audio_id  # Set the _id from database
-        
-        return str(file_path), audio_instance
+        return str(file_path), created_audio
     
     def validate_audio_file(self, file: UploadFile) -> bool:
         """
