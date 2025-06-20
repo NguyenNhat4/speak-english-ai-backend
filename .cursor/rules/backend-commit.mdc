@@ -1,6 +1,0 @@
----
-description: 
-globs: 
-alwaysApply: false
----
-run command to commit changes dirrectly on the go on Backend repo, with correct branch (check branching-naming-convention.mdc to know how). if branch doesn't exist for the type of changes you are working on create them before making changes. help me write series of 'commit . remember to  stage and commit small changes at a time . commit description should follow rules outlined in cursor\rules\git_commit_rules.mdc
