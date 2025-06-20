@@ -4,8 +4,8 @@ from app.config.settings import settings
 # Configure Gemini AI with centralized settings
 genai.configure(api_key=settings.get_gemini_api_key())
 
-# Initialize the Gemini model
-model = genai.GenerativeModel("gemini-2.0-flash")
+# Initialize the Gemini model from settings
+gemini_model = genai.GenerativeModel(settings.gemini_model_name)
 
 def generate_response(prompt: str):
     """
@@ -31,6 +31,6 @@ def generate_response(prompt: str):
     Raises:
         Exception: If there are any issues with the API call or response generation.
     """
-    response = model.generate_content(prompt)
+    response = gemini_model.generate_content(prompt)
     return response.text
 

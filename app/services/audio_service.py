@@ -22,17 +22,13 @@ import inspect
 import whisper
 import torch
 from threading import Lock
-import google.generativeai as genai
 
 from app.repositories.audio_repository import AudioRepository
 from app.models.audio import Audio
 from app.utils.transcription_error_message import TranscriptionErrorMessages
 from app.config.database import db
 from app.config.settings import settings
-
-# Configure AI services
-genai.configure(api_key=settings.get_gemini_api_key())
-gemini_model = genai.GenerativeModel("gemini-1.5-flash")
+from app.utils.gemini import gemini_model
 
 logger = logging.getLogger(__name__)
 
@@ -168,9 +164,10 @@ class AudioService:
         """
         try:
             # Create temporary file and transcribe
-            transcription, temp_file_path = self.transcribe_from_upload(file, language_code)
+            transcription, temp_file_path_obj = self.transcribe_from_upload(file, language_code)
             self.logger.debug(f"Transcription completed with length: {len(transcription) if transcription else 0}")
             
+            temp_file_path = str(temp_file_path_obj) if temp_file_path_obj else None
             return transcription, temp_file_path
             
         except Exception as e:
@@ -180,7 +177,7 @@ class AudioService:
                 detail=f"Audio transcription failed: {str(e)}"
             )
     
-    def transcribe_from_upload(self, audio_file: UploadFile, language_code: str = "en-US") -> Tuple[str, Path]:
+    def transcribe_from_upload(self, audio_file: UploadFile, language_code: str = "en-US") -> Tuple[str, Optional[Path]]:
         """
         Create a temporary file from upload and transcribe it without storing in DB first.
         
@@ -282,16 +279,16 @@ class AudioService:
         
         except ImportError:
             logger.error("SpeechRecognition library not installed. Please install it with: pip install SpeechRecognition")
-            return TranscriptionErrorMessages.FALLBACK_ERROR.value
+            return TranscriptionErrorMessages.DEFAULT_FALLBACK_ERROR.value
         except sr.UnknownValueError:
             logger.error("Speech recognition could not understand audio")
             return TranscriptionErrorMessages.EMPTY_TRANSCRIPTION.value
         except sr.RequestError as e:
             logger.error(f"Could not request results from Google Web Speech API; {str(e)}")
-            return TranscriptionErrorMessages.FALLBACK_ERROR.value
+            return TranscriptionErrorMessages.DEFAULT_FALLBACK_ERROR.value
         except Exception as e:
             logger.error(f"Error in local transcription: {str(e)}")
-            return TranscriptionErrorMessages.FALLBACK_ERROR.value
+            return TranscriptionErrorMessages.DEFAULT_FALLBACK_ERROR.value
     
     def transcribe_audio_with_whisper(self, audio_file_path: Path, language_code: str = "en-US") -> str:
         """
@@ -325,7 +322,7 @@ class AudioService:
             
         except Exception as e:
             logger.error(f"Error in Whisper transcription: {str(e)}")
-            return TranscriptionErrorMessages.FALLBACK_ERROR.value
+            return TranscriptionErrorMessages.DEFAULT_FALLBACK_ERROR.value
     
     def _try_fallback_transcription(self, audio_file: Path, language_code: str = "en-US") -> str:
         """
@@ -364,7 +361,7 @@ class AudioService:
             logger.warning(f"Fallback transcription failed: {str(e)}")
         
         # If all else fails, return a default message
-        return TranscriptionErrorMessages.FALLBACK_ERROR.value
+        return TranscriptionErrorMessages.DEFAULT_FALLBACK_ERROR.value
     
     # =============================================================================
     # FEEDBACK AND AI PROCESSING METHODS
@@ -379,6 +376,7 @@ class AudioService:
         audio_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
+        DEPRECATED: This method is outdated. Use FeedbackService to generate feedback.
         Process audio transcription for feedback generation.
         
         Args:
@@ -413,8 +411,10 @@ class AudioService:
                     detail="Invalid conversation ID format"
                 )
             
-            # Generate AI feedback
-            feedback_data, _ = self.generate_feedback(transcription)
+            # TODO: Refactor or remove this method.
+            # The feedback generation logic has been moved to FeedbackService.
+            # feedback_data, _ = self.generate_feedback(transcription)
+            feedback_data = {} # Placeholder
             
             # Prepare processing results
             processing_results = {
@@ -453,20 +453,23 @@ class AudioService:
             HTTPException: If audio not found
         """
         try:
-            audio_record = self.audio_repo.get_by_id(audio_id)
+            audio_record = self.audio_repo.find_by_id(audio_id)
             if not audio_record:
                 raise HTTPException(
                     status_code=404,
                     detail="Audio record not found"
                 )
             
+            file_path = audio_record.get("file_path")
+            file_size = self._get_file_size(file_path) if file_path else None
+            created_at = audio_record.get('created_at')
             metadata = {
-                "id": str(audio_record._id),
-                "filename": audio_record.filename,
-                "user_id": str(audio_record.user_id),
-                "language": audio_record.language,
-                "created_at": audio_record.created_at.isoformat() if audio_record.created_at else None,
-                "file_size": self._get_file_size(audio_record.file_path) if hasattr(audio_record, 'file_path') else None
+                "id": audio_record.get("id"),
+                "filename": audio_record.get("filename"),
+                "user_id": str(audio_record.get("user_id")),
+                "language": audio_record.get("language"),
+                "created_at": created_at.isoformat() if created_at else None,
+                "file_size": file_size
             }
             
             return metadata

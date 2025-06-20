@@ -25,24 +25,33 @@ class ApplicationConfig(BaseSettings):
     database_name: str = Field(description="MongoDB database name")
     
     # Security Configuration
-    jwt_secret_key: SecretStr = Field(description="JWT secret key (minimum 32 characters)")
+    jwt_secret_key: SecretStr = Field(description="JWT secret key (minimum 32 characters)", alias="JWT_SECRET_KEY")
     jwt_algorithm: str = Field(default="HS256", description="JWT signing algorithm")
-    jwt_access_token_expire_minutes: int = Field(default=30, description="JWT token expiration in minutes")
-    jwt_refresh_token_expire_days: int = Field(default=7, description="JWT refresh token expiration in days")
+    jwt_access_token_expire_minutes: int = Field(
+        default=30,
+        description="JWT token expiration in minutes",
+        alias="JWT_ACCESS_TOKEN_EXPIRE_MINUTES"
+    )
+    jwt_refresh_token_expire_days: int = Field(
+        default=7,
+        description="JWT refresh token expiration in days",
+        alias="REFRESH_TOKEN_EXPIRE_DAYS"
+    )
     
     # AI Services Configuration
-    gemini_api_key: SecretStr = Field(description="Google Gemini API key")
+    gemini_api_key: SecretStr = Field(description="Google Gemini API key", alias="GEMINI_API_KEY")
+    gemini_model_name: str = Field(default="gemini-1.5-flash", description="Google Gemini model name", alias="GEMINI_MODEL_NAME")
     
     # Azure Speech Services Configuration
-    azure_speech_key: Optional[SecretStr] = Field(None, description="Azure Speech Services API key")
-    azure_speech_region: str = Field(default="eastus", description="Azure Speech Services region")
+    azure_speech_key: Optional[SecretStr] = Field(None, description="Azure Speech Services API key", alias="AZURE_SPEECH_KEY")
+    azure_speech_region: str = Field(default="eastus", description="Azure Speech Services region", alias="AZURE_SPEECH_REGION")
     
     # TTS Configuration
-    tts_backend_base_url: str = Field(default="http://tts_kokoro:8880", description="TTS backend service URL")
+    tts_backend_base_url: str = Field(default="http://tts_kokoro:8880", description="TTS backend service URL", alias="TTS_BACKEND_BASE_URL")
     
     # Application Configuration
-    debug_mode: bool = Field(default=False, description="Enable debug mode")
-    log_level: str = Field(default="INFO", description="Logging level")
+    debug_mode: bool = Field(default=False, description="Enable debug mode", alias="DEBUG")
+    log_level: str = Field(default="INFO", description="Logging level", alias="LOG_LEVEL")
     app_name: str = Field(default="SpeakAI Backend", description="Application name")
     app_version: str = Field(default="1.0.0", description="Application version")
     
@@ -51,19 +60,18 @@ class ApplicationConfig(BaseSettings):
     max_upload_size: int = Field(default=50 * 1024 * 1024, description="Maximum file upload size in bytes")
     
     # API Configuration
-    api_host: str = Field(default="0.0.0.0", description="API host address")
-    api_port: int = Field(default=8000, description="API port")
-    cors_origins: Union[str, List[str]] = Field(default="*", description="CORS allowed origins (comma-separated)")
+    api_host: str = Field(default="0.0.0.0", description="API host address", alias="API_HOST")
+    api_port: int = Field(default=8000, description="API port", alias="API_PORT")
+    cors_origins: Union[str, List[str]] = Field(default="*", description="CORS allowed origins (comma-separated)", alias="CORS_ORIGINS")
     
     # Performance Configuration
-    worker_count: int = Field(default=1, description="Number of worker processes")
+    worker_count: int = Field(default=1, description="Number of worker processes", alias="WORKER_COUNT")
     
-    model_config = {
-        "env_file": ".env",
-        "env_file_encoding": "utf-8",
-        "case_sensitive": True,
-        "extra": "forbid"  # Forbid extra environment variables
-    }
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        case_sensitive = False
+        extra = "forbid"
         
     @field_validator('jwt_secret_key')
     @classmethod
