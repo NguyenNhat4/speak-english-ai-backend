@@ -199,6 +199,10 @@ class EventHandler:
         Raises:
             ValueError: If task name is unknown
         """
+        if task_name == "process_feedback_for_mistakes":
+            logger.warning(f"Skipping legacy task 'process_feedback_for_mistakes' for feedback: {data.get('feedback_id')}")
+            return
+
         if task_name == "calculate_next_practice_dates":
             # Temporarily disabled until mistake service is implemented
             logger.info(f"Practice date calculation temporarily disabled for user: {data.get('user_id')}")
