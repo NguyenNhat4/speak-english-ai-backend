@@ -113,6 +113,31 @@ class BaseRepository(Generic[T]):
                 detail=f"Invalid {self.collection_name} ID or query failed: {str(e)}"
             )
     
+    def find_one(self, filter_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Find a single document by a filter.
+        
+        Args:
+            filter_dict: MongoDB filter dictionary
+            
+        Returns:
+            A single document or None
+        """
+        try:
+            self.logger.debug(f"Finding one {self.collection_name} with filter: {filter_dict}")
+            document = self.collection.find_one(filter_dict)
+            if document:
+                self.logger.debug(f"Found {self.collection_name} with filter: {filter_dict}")
+            else:
+                self.logger.debug(f"No {self.collection_name} found with filter: {filter_dict}")
+            return document
+        except Exception as e:
+            self.logger.error(f"Error finding one {self.collection_name}: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to find {self.collection_name}: {str(e)}"
+            )
+    
     def find_all(self, filter_dict: Optional[Dict[str, Any]] = None, 
                  skip: int = 0, limit: Optional[int] = None,
                  sort: Optional[List[tuple]] = None) -> List[Dict[str, Any]]:
