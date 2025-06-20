@@ -4,10 +4,7 @@ from typing import List, Dict, Any
 from app.schemas.message import MessageResponse
 from app.utils.auth import get_current_user
 from app.services.message_service import MessageService
-from app.services.feedback_service import FeedbackService
-from app.repositories.message_repository import MessageRepository
-from app.repositories.feedback_repository import FeedbackRepository
-from app.utils.dependencies import get_message_service, get_feedback_service, get_message_repository, get_feedback_repository
+from app.utils.dependencies import get_message_service
 
 router = APIRouter(
     tags=["messages"]
@@ -64,32 +61,12 @@ def delete_message(
 @router.get("/messages/{message_id}/feedback", response_model=dict)
 def get_message_feedback(
     message_id: str,
-    message_repo: MessageRepository = Depends(get_message_repository),
-    feedback_repo: FeedbackRepository = Depends(get_feedback_repository)
+    message_service: MessageService = Depends(get_message_service)
 ):
     """
     Get user-friendly feedback for a specific message.
     """
-    message = message_repo.get_message_by_id(message_id)
-    if not message:
-        raise HTTPException(status_code=404, detail="Message not found")
-
-    feedback_id = message.get("feedback_id")
-    if not feedback_id:
-        return {"user_feedback": "Feedback is still being generated. Please try again in a moment.", "is_ready": False}
-
-    feedback = feedback_repo.find_by_id(str(feedback_id))
-    if not feedback:
-        return {"user_feedback": "No feedback available for this message.", "is_ready": False}
-
-    return {
-        "user_feedback": {
-            "id": str(feedback.get("id")),
-            "user_feedback": feedback.get("user_feedback", "Feedback content unavailable"),
-            "created_at": feedback.get("created_at")
-        },
-        "is_ready": True
-    }
+    return message_service.get_feedback_for_message(message_id)
 
 # GET /messages/{message_id} - Get message details (to be implemented)
 # This endpoint will retrieve a specific message with its content and metadata
