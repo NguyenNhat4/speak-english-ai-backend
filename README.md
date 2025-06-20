@@ -6,7 +6,6 @@ This repository contains the backend code for the Speak AI application, a platfo
 
 - **Speech Transcription**: Transcribes user speech using local speech recognition
 - **Grammar & Vocabulary Feedback**: Analyzes speech and provides detailed feedback on grammar and vocabulary
-- **Mistake Tracking**: Identifies and tracks language mistakes for targeted practice
 - **Spaced Repetition Practice**: Implements a spaced repetition algorithm for effective language learning
 - **Conversation Context**: Considers conversation context when providing feedback
 
@@ -15,7 +14,7 @@ This repository contains the backend code for the Speak AI application, a platfo
 The backend follows a clean architecture approach with layers:
 
 - **API Layer**: FastAPI endpoints for handling HTTP requests
-- **Service Layer**: Business logic for processing audio, generating feedback, and managing mistakes
+- **Service Layer**: Business logic for processing audio, and generating feedback
 - **Data Layer**: MongoDB collections for persistent storage
 
 ### Component Diagrams
@@ -23,14 +22,12 @@ The backend follows a clean architecture approach with layers:
 For detailed architecture information, see the component diagrams:
 - [Component Architecture](docs/component-diagram.md)
 - [Speech Analysis Sequence](docs/speech-analysis-sequence.md)
-- [Mistake Practice Sequence](docs/mistake-practice-sequence.md)
 
 ## Key Components
 
 1. **Audio Processing**: Handles audio transcription using the SpeechRecognition library
 2. **Feedback Service**: Generates dual feedback (user-friendly and detailed) using Gemini API
-3. **Mistake Service**: Extracts, stores, and manages language mistakes
-4. **Background Processing**: Processes time-consuming tasks asynchronously
+3. **Background Processing**: Processes time-consuming tasks asynchronously
 
 ## API Endpoints
 
@@ -40,15 +37,6 @@ For detailed architecture information, see the component diagrams:
   - Accepts audio file upload
   - Optional conversation context
   - Returns transcription and user-friendly feedback
-  - Processes mistakes in the background
-
-### Mistake Endpoints
-
-- **GET /api/mistakes/practice**: Retrieves mistakes due for practice
-  - Returns a list of practice exercises based on spaced repetition
-- **POST /api/mistakes/practice/{mistake_id}/result**: Records practice results
-  - Updates mistake mastery and schedules next practice
-- **GET /api/mistakes/statistics**: Returns statistics about the user's mistakes
 
 ## Getting Started
 
@@ -145,11 +133,6 @@ The API is documented using FastAPI's built-in Swagger UI:
 - `GET /api/conversations`: List user's conversations
 - `POST /api/conversations/{id}/messages`: Add a message to a conversation
 - `GET /api/conversations/{id}/messages`: Get messages for a conversation
-
-### Mistakes
-- `GET /api/mistakes`: Get user's tracked mistakes
-- `POST /api/mistakes/{id}/drill`: Create a practice drill for a mistake
-- `PUT /api/mistakes/{id}`: Update mistake information
 
 ## Development
 
