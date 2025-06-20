@@ -7,8 +7,6 @@ import threading
 import queue
 
 from app.config.database import db
-# Updated import path after mistake service was moved
-# from app.services.mistake_service import MistakeService
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +24,6 @@ class EventHandler:
     """
     
     def __init__(self):
-        # Temporarily disabled - will be re-enabled when mistake service is implemented
-        # self.mistake_service = MistakeService()
-        self.mistake_service = None
         self.running = False
         self.worker_thread = None
     
@@ -48,38 +43,6 @@ class EventHandler:
         if self.worker_thread:
             self.worker_thread.join(timeout=5)
         logger.info("Background event handler stopped")
-    
-    def on_new_feedback(self, feedback_id: str, user_id: Optional[str] = None, transcription: Optional[str] = None):
-        """
-        Handle a new feedback event.
-        
-        Args:
-            feedback_id: ID of the newly created feedback record
-            user_id: Optional user ID associated with the feedback
-            transcription: Optional transcription text associated with the feedback
-        """
-        logger.info(f"Received new feedback event for feedback_id: {feedback_id}")
-        
-        try:
-            # Schedule task to process this feedback for mistakes
-            task_data = {
-                "feedback_id": feedback_id
-            }
-            
-            # Add additional data if provided
-            if user_id:
-                task_data["user_id"] = user_id
-            
-            if transcription:
-                task_data["transcription"] = transcription
-            
-            self.schedule_task(
-                task_name="process_feedback_for_mistakes",
-                data=task_data,
-                delay_in_seconds=0  # Process immediately
-            )
-        except Exception as e:
-            logger.error(f"Error scheduling feedback processing: {str(e)}")
     
     def schedule_task(self, task_name: str, data: Dict[str, Any], delay_in_seconds: int = 0) -> str:
         """
@@ -237,11 +200,10 @@ class EventHandler:
             ValueError: If task name is unknown
         """
         if task_name == "process_feedback_for_mistakes":
-            # Temporarily disabled until mistake service is implemented
-            logger.info(f"Mistake processing temporarily disabled for feedback: {data.get('feedback_id')}")
+            logger.warning(f"Skipping legacy task 'process_feedback_for_mistakes' for feedback: {data.get('feedback_id')}")
             return
-            
-        elif task_name == "calculate_next_practice_dates":
+
+        if task_name == "calculate_next_practice_dates":
             # Temporarily disabled until mistake service is implemented
             logger.info(f"Practice date calculation temporarily disabled for user: {data.get('user_id')}")
             return
@@ -249,5 +211,9 @@ class EventHandler:
         else:
             raise ValueError(f"Unknown task name: {task_name}")
 
-# Create a singleton instance
-event_handler = EventHandler() 
+# Global instance of the event handler
+event_handler = EventHandler()
+
+def get_event_handler() -> EventHandler:
+    """Get the global event handler instance."""
+    return event_handler
