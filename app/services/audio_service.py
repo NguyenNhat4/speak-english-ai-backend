@@ -18,15 +18,11 @@ from fastapi import HTTPException, UploadFile, Depends
 from bson import ObjectId
 import inspect
 
-# Audio processing imports
-import whisper
-import torch
-from threading import Lock
-
 from app.repositories.audio_repository import AudioRepository
 from app.models.audio import Audio
 from app.utils.transcription_error_message import TranscriptionErrorMessages
 from app.config.settings import settings
+from app.utils.speech_service import transcribe_file
 
 logger = logging.getLogger(__name__)
 
@@ -39,34 +35,6 @@ from app.utils.file_utils import (
     get_file_size,
     UPLOAD_DIR
 )
-
-
-class ModelPool:
-    """Manages Whisper model instances for audio transcription."""
-    
-    def __init__(self):
-        self.model_size = "large-v3-turbo"
-  
-    def get_model(self):
-        device = self.get_device()
-        model = whisper.load_model(self.model_size, device=device)
-        return model
-        
-    def get_device(self):
-        cuda_available = torch.cuda.is_available()
-        
-        if cuda_available:
-            device = "cuda"
-            logger.info(f"GPU device: {torch.cuda.get_device_name(0)}")
-        else:
-            device = "cpu"
-            
-        return device
-
-
-# Initialize model pool and load model
-model_pool = ModelPool()
-loaded_model = model_pool.get_model()
 
 
 class AudioService:
@@ -237,132 +205,23 @@ class AudioService:
         Raises:
             HTTPException: If transcription fails
         """
+        temp_file_path = None
         try:
             # Create temporary file and transcribe
-            transcription, temp_file_path_obj = self.transcribe_from_upload(file, language_code)
+            temp_file_path = create_temp_file(file)
+            transcription = transcribe_file(temp_file_path, language_code)
             self.logger.debug(f"Transcription completed with length: {len(transcription) if transcription else 0}")
             
-            temp_file_path = str(temp_file_path_obj) if temp_file_path_obj else None
-            return transcription, temp_file_path
+            return transcription, str(temp_file_path)
             
         except Exception as e:
             self.logger.error(f"Failed to transcribe audio: {str(e)}")
+            if temp_file_path:
+                cleanup_temp_file(str(temp_file_path))
             raise HTTPException(
                 status_code=500,
                 detail=f"Audio transcription failed: {str(e)}"
             )
-
-    def transcribe_from_upload(self, audio_file: UploadFile, language_code: str = "en-US") -> Tuple[str, Optional[Path]]:
-        """
-        Handles transcription from an UploadFile object, including temp file management.
-        """
-        temp_file_path = None
-        try:
-            # Use a temporary file for processing
-            temp_file_path = create_temp_file(audio_file)
-            
-            transcription = self.transcribe_audio_file(temp_file_path, language_code)
-            
-            return transcription, temp_file_path
-        
-        except Exception as e:
-            # Log the exception and re-raise to be handled by the calling method
-            self.logger.error(f"Error during transcription from upload: {str(e)}")
-            raise
-            
-        finally:
-            # This ensures cleanup happens if transcribe_audio_file fails,
-            # but the caller of transcribe_audio is now responsible for cleanup on success.
-            # This is a change in design to allow the caller to use the temp file path.
-            pass
-
-    def transcribe_audio_file(self, audio_file: Path, language_code: str = "en-US", use_whisper: bool = True) -> str:
-        """
-        Transcribes an audio file using either local or Whisper transcription.
-        """
-        try:
-            if use_whisper:
-                transcription = self.transcribe_audio_with_whisper(audio_file, language_code)
-            else:
-                transcription = self.transcribe_audio_local(audio_file, language_code)
-            
-            if not transcription or not transcription.strip():
-                return TranscriptionErrorMessages.EMPTY_TRANSCRIPTION.value
-                
-            return transcription
-
-        except Exception as e:
-            self.logger.error(f"Transcription failed for {audio_file}: {e}")
-            return self._try_fallback_transcription(audio_file, language_code)
-
-    def transcribe_audio_local(self, audio_file_path: Path, language_code: str = "en-US") -> str:
-        """
-        Placeholder for local transcription. 
-        Currently uses Whisper as a fallback.
-        """
-        # This is where you might implement an alternative, non-GPU transcription method.
-        # For now, it defaults to Whisper.
-        self.logger.info("Using local transcription (currently Whisper-based)")
-        return self.transcribe_audio_with_whisper(audio_file_path, language_code)
-        
-    def transcribe_audio_with_whisper(self, audio_file_path: Path, language_code: str = "en-US") -> str:
-        """
-        Transcribes audio using the Whisper model.
-        """
-        try:
-            start_time = time.time()
-            
-            # Perform transcription
-            result = loaded_model.transcribe(str(audio_file_path), language=language_code)
-            
-            end_time = time.time()
-            self.logger.info(f"Whisper transcription took {end_time - start_time:.2f} seconds")
-            
-            return result["text"]
-            
-        except Exception as e:
-            self.logger.error(f"Whis_per transcription failed: {e}")
-            # The calling method will handle the fallback
-            raise
-
-    def _try_fallback_transcription(self, audio_file: Path, language_code: str = "en-US") -> str:
-        """
-        Attempt to transcribe using alternative methods when the primary method fails.
-        
-        Args:
-            audio_file: Path to the audio file to transcribe
-            language_code: Language code for transcription (default: en-US)
-            
-        Returns:
-            Transcription text or a default message if all methods fail
-        """
-        try:
-            # Try to use an external API service like Google Cloud Speech-to-Text
-            from google.cloud import speech
-            
-            client = speech.SpeechClient()
-            
-            with open(audio_file, "rb") as audio_file_content:
-                content = audio_file_content.read()
-            
-            audio = speech.RecognitionAudio(content=content)
-            config = speech.RecognitionConfig(
-                encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-                sample_rate_hertz=16000,
-                language_code=language_code,
-            )
-            
-            response = client.recognize(config=config, audio=audio)
-            transcription = " ".join([result.alternatives[0].transcript for result in response.results])
-            
-            if transcription and transcription.strip():
-                return transcription
-                
-        except Exception as e:
-            logger.warning(f"Fallback transcription failed: {str(e)}")
-        
-        # If all else fails, return a default message
-        return TranscriptionErrorMessages.DEFAULT_FALLBACK_ERROR.value
 
     def get_audio_metadata(self, audio_id: str) -> Dict[str, Any]:
         """
