@@ -65,17 +65,17 @@ class FeedbackService:
     
     def __init__(
         self,
-        ai_service: AIService = Depends(),
-        conversation_repo: ConversationRepository = Depends(),
-        message_repo: MessageRepository = Depends(),
-        feedback_repo: FeedbackRepository = Depends(),
+        ai_service: Optional[AIService] = None,
+        conversation_repo: Optional[ConversationRepository] = None,
+        message_repo: Optional[MessageRepository] = None,
+        feedback_repo: Optional[FeedbackRepository] = None,
     ):
         """Initialize the feedback service."""
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.ai_service = ai_service
-        self.conversation_repo = conversation_repo
-        self.message_repo = message_repo
-        self.feedback_repo = feedback_repo
+        self.ai_service = ai_service or AIService()
+        self.conversation_repo = conversation_repo or ConversationRepository()
+        self.message_repo = message_repo or MessageRepository()
+        self.feedback_repo = feedback_repo or FeedbackRepository()
         self._validate_dependencies()
     
     def _validate_dependencies(self) -> None:
@@ -333,7 +333,7 @@ class FeedbackService:
         )
         
         created_feedback = self.feedback_repo.create(feedback.to_dict())
-        return str(created_feedback["id"])
+        return str(created_feedback["_id"])
     
     def _validate_object_ids(self, ids: List[str]) -> None:
         """Validate that all provided strings are valid ObjectId format."""

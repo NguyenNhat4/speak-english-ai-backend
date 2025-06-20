@@ -10,6 +10,9 @@ from app.services.audio_service import AudioService
 from app.services.conversation_service import ConversationService
 from app.services.feedback_service import FeedbackService
 from app.services.ai_service import AIService
+from app.services.user_service import UserService
+from app.services.message_service import MessageService
+from app.services.tts_service import TTSService
 from app.repositories.audio_repository import AudioRepository
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.feedback_repository import FeedbackRepository
@@ -32,9 +35,24 @@ def get_feedback_service() -> FeedbackService:
     return FeedbackService()
 
 
+def get_message_service() -> MessageService:
+    """Get MessageService instance."""
+    return MessageService()
+
+
+def get_tts_service() -> TTSService:
+    """Get TTSService instance."""
+    return TTSService()
+
+
 def get_ai_service() -> AIService:
     """Get AIService instance."""
     return AIService()
+
+
+def get_user_service() -> UserService:
+    """Get UserService instance."""
+    return UserService()
 
 
 def get_audio_repository() -> AudioRepository:
