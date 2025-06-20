@@ -9,14 +9,15 @@ import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from bson import ObjectId
-from fastapi import HTTPException
+from fastapi import HTTPException, Depends
 
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
 from app.models.conversation import Conversation
 from app.models.message import Message
-from app.schemas.conversation import ConversationCreate, ConversationResponse
+from app.schemas.conversation import ConversationCreate, ConversationResponse, ConversationUpdate
 from app.schemas.message import MessageResponse
+from app.services.ai_service import AIService
 
 logger = logging.getLogger(__name__)
 
@@ -29,18 +30,42 @@ class ConversationService:
     creation, retrieval, validation, and management.
     """
     
-    def __init__(self, conversation_repo: Optional[ConversationRepository] = None, message_repo: Optional[MessageRepository] = None):
+    def __init__(
+        self, 
+        conversation_repo: ConversationRepository = Depends(), 
+        message_repo: MessageRepository = Depends(),
+        ai_service: AIService = Depends()
+    ):
         """
         Initialize the conversation service with repository dependencies.
         
         Args:
-            conversation_repo: ConversationRepository instance
-            message_repo: MessageRepository instance
+            conversation_repo: ConversationRepository instance from dependency injection
+            message_repo: MessageRepository instance from dependency injection
+            ai_service: AIService instance from dependency injection
         """
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.conversation_repo = conversation_repo or ConversationRepository()
-        self.message_repo = message_repo or MessageRepository()
+        self.conversation_repo = conversation_repo
+        self.message_repo = message_repo
+        self.ai_service = ai_service
     
+    def create_new_conversation(self, user_id: str, convo_data: ConversationCreate) -> Dict[str, Any]:
+        """
+        Validates, refines context, and creates a new conversation with an initial message.
+        """
+        self.validate_conversation_data(convo_data)
+        
+        refined_context = self.ai_service.refine_conversation_context(
+            user_role=convo_data.user_role,
+            ai_role=convo_data.ai_role,
+            situation=convo_data.situation
+        )
+        
+        return self.create_conversation(
+            user_id=user_id,
+            refined_context=refined_context
+        )
+
     def create_conversation(
         self, 
         user_id: str, 
@@ -309,4 +334,32 @@ class ConversationService:
             "sender": message.sender,
             "content": message.content,
             "timestamp": message.timestamp.isoformat()
-        } 
+        }
+
+    def get_conversation_by_id(self, conversation_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a single conversation by its ID.
+        """
+        conversation = self.conversation_repo.get_conversation_by_id(conversation_id)
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return conversation
+
+    def update_conversation(self, conversation_id: str, update_data: ConversationUpdate) -> Optional[Dict[str, Any]]:
+        """
+        Update conversation metadata.
+        """
+        update_dict = update_data.dict(exclude_unset=True)
+        updated_conversation = self.conversation_repo.update(conversation_id, update_dict)
+        if not updated_conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return updated_conversation
+
+    def delete_conversation(self, conversation_id: str):
+        """
+        Delete a conversation.
+        """
+        deleted = self.conversation_repo.delete(conversation_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return {"message": "Conversation deleted successfully"} 
