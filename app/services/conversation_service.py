@@ -32,22 +32,22 @@ class ConversationService:
     
     def __init__(
         self, 
-        conversation_repo: ConversationRepository = Depends(), 
-        message_repo: MessageRepository = Depends(),
-        ai_service: AIService = Depends()
+        conversation_repo: Optional[ConversationRepository] = None, 
+        message_repo: Optional[MessageRepository] = None,
+        ai_service: Optional[AIService] = None
     ):
         """
         Initialize the conversation service with repository dependencies.
         
         Args:
-            conversation_repo: ConversationRepository instance from dependency injection
-            message_repo: MessageRepository instance from dependency injection
-            ai_service: AIService instance from dependency injection
+            conversation_repo: ConversationRepository instance
+            message_repo: MessageRepository instance
+            ai_service: AIService instance
         """
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.conversation_repo = conversation_repo
-        self.message_repo = message_repo
-        self.ai_service = ai_service
+        self.conversation_repo = conversation_repo or ConversationRepository()
+        self.message_repo = message_repo or MessageRepository()
+        self.ai_service = ai_service or AIService()
     
     def create_new_conversation(self, user_id: str, convo_data: ConversationCreate) -> Dict[str, Any]:
         """
