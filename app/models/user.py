@@ -2,6 +2,7 @@
 from datetime import datetime
 # Import ObjectId from bson to generate unique identifiers for MongoDB documents
 from bson import ObjectId
+from typing import Optional
 
 # Define the User class to represent a user entity in the application
 class User:
@@ -12,7 +13,7 @@ class User:
     # - password_hash: The hashed password for security (required)
     # - avatar_url: Optional URL to the user's profile picture (defaults to None)
     # - role: User's role, either "user" or "admin" (defaults to "user")
-    def __init__(self, name: str, email: str, password_hash: str, avatar_url: str = None, role: str = "user"):
+    def __init__(self, name: str, email: str, password_hash: str, avatar_url: Optional[str] = None, role: str = "user"):
         # Generate a unique ObjectId for the user, used as the primary key in MongoDB
         self._id = ObjectId()
         # Store the user's name
@@ -29,6 +30,10 @@ class User:
         self.created_at = datetime.utcnow()
         # Set the last updated timestamp to the current UTC time (initially same as created_at)
         self.updated_at = datetime.utcnow()
+        # Flag to indicate if the user is soft-deleted
+        self.is_deleted = False
+        # Timestamp of when the user was soft-deleted
+        self.deleted_at = None
 
     # Convert the User instance to a dictionary for MongoDB storage
     # Returns a dict representation of the user that can be inserted into MongoDB
@@ -49,5 +54,9 @@ class User:
             # Timestamp of when the user was created
             "created_at": self.created_at,
             # Timestamp of the last update to the user's data
-            "updated_at": self.updated_at
+            "updated_at": self.updated_at,
+            # Soft-delete status
+            "is_deleted": self.is_deleted,
+            # Soft-delete timestamp
+            "deleted_at": self.deleted_at
         }
