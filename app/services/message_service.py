@@ -7,6 +7,7 @@ from app.services.feedback_service import FeedbackService
 from app.services.ai_service import AIService
 from app.repositories.message_repository import MessageRepository
 from app.repositories.audio_repository import AudioRepository
+from app.repositories.feedback_repository import FeedbackRepository
 from app.schemas.message import MessageResponse
 from app.utils.object_id import mongo_doc_to_schema
 
@@ -20,12 +21,14 @@ class MessageService:
         ai_service: Optional[AIService] = None,
         message_repo: Optional[MessageRepository] = None,
         audio_repo: Optional[AudioRepository] = None,
+        feedback_repo: Optional[FeedbackRepository] = None,
     ):
         self.conversation_service = conversation_service or ConversationService()
         self.feedback_service = feedback_service or FeedbackService()
         self.ai_service = ai_service or AIService()
         self.message_repo = message_repo or MessageRepository()
         self.audio_repo = audio_repo or AudioRepository()
+        self.feedback_repo = feedback_repo or FeedbackRepository()
 
     async def process_user_message(
         self,
@@ -99,4 +102,29 @@ class MessageService:
         deleted = self.message_repo.delete(message_id)
         if not deleted:
             raise HTTPException(status_code=404, detail="Message not found")
-        return {"message": "Message deleted successfully"} 
+        return {"message": "Message deleted successfully"}
+
+    def get_feedback_for_message(self, message_id: str) -> dict:
+        """
+        Get user-friendly feedback for a specific message.
+        """
+        message = self.message_repo.get_message_by_id(message_id)
+        if not message:
+            raise HTTPException(status_code=404, detail="Message not found")
+
+        feedback_id = message.get("feedback_id")
+        if not feedback_id:
+            return {"user_feedback": "Feedback is still being generated. Please try again in a moment.", "is_ready": False}
+
+        feedback = self.feedback_repo.find_by_id(str(feedback_id))
+        if not feedback:
+            return {"user_feedback": "No feedback available for this message.", "is_ready": False}
+
+        return {
+            "user_feedback": {
+                "id": str(feedback.get("id")),
+                "user_feedback": feedback.get("user_feedback", "Feedback content unavailable"),
+                "created_at": feedback.get("created_at")
+            },
+            "is_ready": True
+        } 
