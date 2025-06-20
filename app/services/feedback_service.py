@@ -15,7 +15,6 @@ import shutil
 from fastapi import HTTPException, UploadFile, Depends
 from dataclasses import dataclass
 
-from app.config.database import db
 from app.models.feedback import Feedback
 from app.models.results.feedback_result import FeedbackResult
 from app.services.ai_service import AIService, ConversationContext
@@ -158,7 +157,7 @@ class FeedbackService:
                 status_code=500,
                 detail="An unexpected error occurred during feedback generation"
             )
-    
+
     def _validate_feedback_request(self, request: FeedbackRequest) -> None:
         """Validate feedback request parameters."""
         if not request.transcription or not request.transcription.strip():
@@ -249,62 +248,35 @@ class FeedbackService:
     
     def _build_success_response(self, request: FeedbackRequest, feedback_id: str) -> Dict[str, Any]:
         """Build success response for feedback generation."""
+        sanitized_filename = sanitize_filename(request.file_path)
         return {
             "status": "success",
+            "message": "Feedback generated successfully.",
             "feedback_id": feedback_id,
             "user_id": request.user_id,
             "conversation_id": request.conversation_id,
             "audio_id": request.audio_id,
             "user_message_id": request.user_message_id,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
+            "file_path": f"/audio/{sanitized_filename}"
         }
-    
+
     async def save_audio_file(self, file: UploadFile, user_id: str) -> str:
         """
-        Save an uploaded audio file to the server.
-        
-        Args:
-            file: The audio file to save
-            user_id: ID of the user
-            
-        Returns:
-            Path to the saved file on disk
-            
-        Raises:
-            HTTPException: If file save fails
+        Saves an uploaded audio file and returns its path.
+        This method is now part of the feedback generation flow.
         """
-        try:
-            self._validate_audio_file(file)
-            self._validate_object_ids([user_id])
-            
-            file_path = await self._save_file_to_disk(file, user_id)
-            
-            self.logger.info(f"Successfully saved audio file for user {user_id}: {file_path}")
-            return str(file_path)
-            
-        except FeedbackServiceError as e:
-            self.logger.error(f"Audio file validation error: {e}")
-            raise HTTPException(status_code=400, detail=str(e))
-        except Exception as e:
-            self.logger.error(f"Failed to save audio file: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail="Audio file save failed"
-            )
-    
+        self._validate_audio_file(file)
+        file_path = await self._save_file_to_disk(file, user_id)
+        return str(file_path)
+
     def _validate_audio_file(self, file: UploadFile) -> None:
-        """Validate audio file before saving."""
-        try:
-            validate_audio_file(file)
-        except HTTPException as e:
-            raise FeedbackServiceError(str(e.detail))
-    
+        """Validate audio file properties."""
+        validate_audio_file(file)
+
     async def _save_file_to_disk(self, file: UploadFile, user_id: str) -> Path:
-        """Save file to disk with proper error handling."""
-        try:
-            return save_uploaded_file(file, user_id, "feedback")
-        except Exception as e:
-            raise FeedbackServiceError(f"Failed to save file to disk: {e}")
+        """Save uploaded file to disk."""
+        return await save_uploaded_file(file, user_id)
 
     async def _store_feedback(
         self,
@@ -314,42 +286,43 @@ class FeedbackService:
         transcription: Optional[str] = None
     ) -> str:
         """
-        Store feedback data in the database.
-        """
-        if isinstance(feedback_data, dict):
-            feedback_dict = feedback_data
-        else:
-            feedback_dict = feedback_data.to_dict()
-
-        if not user_message_id:
-            raise FeedbackServiceError("user_message_id is required to store feedback")
-
-        feedback = Feedback(
-            target_id=str_to_object_id(user_message_id, "message"),
-            target_type="message",
-            user_id=str_to_object_id(user_id, "user"),
-            transcription=transcription,
-            user_feedback=feedback_dict.get("user_feedback", "No feedback content")
-        )
+        Stores feedback data in the database.
         
-        created_feedback = self.feedback_repo.create(feedback.to_dict())
-        return str(created_feedback["_id"])
-    
+        This method now directly uses the FeedbackRepository.
+        """
+        if isinstance(feedback_data, FeedbackResult):
+            feedback_dict = feedback_data.dict()
+        else:
+            feedback_dict = feedback_data
+
+        new_feedback = {
+            "user_id": str_to_object_id(user_id),
+            "user_message_id": str_to_object_id(user_message_id) if user_message_id else None,
+            "transcription": transcription,
+            "created_at": datetime.utcnow(),
+            **feedback_dict
+        }
+        
+        feedback_id = self.feedback_repo.create(new_feedback)
+        
+        if user_message_id:
+            self._update_conversation_feedback_list(user_message_id, feedback_id)
+            
+        return feedback_id
+
     def _validate_object_ids(self, ids: List[str]) -> None:
-        """Validate that all provided strings are valid ObjectId format."""
-        for id_str in ids:
-            if not id_str:
-                raise FeedbackServiceError("ID cannot be empty")
-            try:
-                ObjectId(id_str)
-            except Exception:
-                raise FeedbackServiceError(f"Invalid ObjectId format: {id_str}")
-    
+        """Validate a list of string ObjectIDs."""
+        for item_id in ids:
+            if not ObjectId.is_valid(item_id):
+                raise FeedbackServiceError(f"Invalid ObjectId: {item_id}")
+
     def _update_conversation_feedback_list(self, message_id: str, feedback_id: str) -> None:
         """
         Update the conversation's feedback list with the new feedback ID.
         """
-        # Implementation of this method is not provided in the original file or the code block
-        # This method should be implemented to update the conversation's feedback list
-        pass
+        try:
+            self.message_repo.update_conversation_feedback_list(message_id, feedback_id)
+        except Exception as e:
+            self.logger.error(f"Error updating conversation feedback list: {e}")
+            # Non-critical error, so we don't re-raise
     
