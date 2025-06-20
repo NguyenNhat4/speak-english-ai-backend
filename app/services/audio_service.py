@@ -83,17 +83,17 @@ class AudioService:
     - Error handling and fallback mechanisms
     """
     
-    def __init__(self, audio_repo: AudioRepository = Depends()):
+    def __init__(self, audio_repo: Optional[AudioRepository] = None):
         """
         Initialize the audio service with repository dependency.
         
         Args:
-            audio_repo: AudioRepository instance from dependency injection
+            audio_repo: AudioRepository instance
         """
         self.logger = logging.getLogger(self.__class__.__name__)
         self.upload_dir = Path("app/uploads")
         self.upload_dir.mkdir(parents=True, exist_ok=True)
-        self.audio_repo = audio_repo
+        self.audio_repo = audio_repo or AudioRepository()
     
     def process_and_transcribe_audio(self, file: UploadFile, user_id: str) -> dict:
         """
