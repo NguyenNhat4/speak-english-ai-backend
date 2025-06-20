@@ -23,3 +23,9 @@ class ConversationResponse(BaseModel):
             datetime: lambda v: v.isoformat(),
             ObjectId: lambda v: str(v)
         }
+
+class ConversationUpdate(BaseModel):
+    user_role: Optional[str] = None
+    ai_role: Optional[str] = None
+    situation: Optional[str] = None
+    ended_at: Optional[datetime] = None

@@ -14,7 +14,7 @@ import time
 from typing import Dict, Any, Optional, Tuple, List
 from pathlib import Path
 from datetime import datetime
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException, UploadFile, Depends
 from bson import ObjectId
 import inspect
 
@@ -83,18 +83,67 @@ class AudioService:
     - Error handling and fallback mechanisms
     """
     
-    def __init__(self, audio_repo: Optional[AudioRepository] = None):
+    def __init__(self, audio_repo: AudioRepository = Depends()):
         """
         Initialize the audio service with repository dependency.
         
         Args:
-            audio_repo: AudioRepository instance
+            audio_repo: AudioRepository instance from dependency injection
         """
         self.logger = logging.getLogger(self.__class__.__name__)
         self.upload_dir = Path("app/uploads")
         self.upload_dir.mkdir(parents=True, exist_ok=True)
-        self.audio_repo = audio_repo or AudioRepository()
+        self.audio_repo = audio_repo
     
+    def process_and_transcribe_audio(self, file: UploadFile, user_id: str) -> dict:
+        """
+        Orchestrates the audio processing pipeline: transcription, saving, and cleanup.
+        """
+        try:
+            # Step 1: Transcribe the audio file
+            transcription, temp_file_path = self.transcribe_audio(file)
+            
+            # Step 2: Check if transcription was successful
+            if transcription and transcription.strip() and transcription != TranscriptionErrorMessages.EMPTY_TRANSCRIPTION.value:
+                try:
+                    # Reset file pointer before saving
+                    file.file.seek(0)
+                    audio_id = self.save_audio_file(file, user_id)
+                    
+                    cleanup_temp_file(temp_file_path)
+                    
+                    return {
+                        "audio_id": audio_id,
+                        "transcription": transcription,
+                        "success": True
+                    }
+                except Exception as e:
+                    self.logger.error(f"Error saving audio after successful transcription: {str(e)}")
+                    cleanup_temp_file(temp_file_path)
+                    return {
+                        "audio_id": None,
+                        "transcription": transcription,
+                        "success": True,
+                        "warning": "Transcription successful but audio storage failed"
+                    }
+            else:
+                cleanup_temp_file(temp_file_path)
+                return {
+                    "audio_id": None,
+                    "transcription": "No speech detected in audio file",
+                    "success": False
+                }
+        except Exception as e:
+            self.logger.error(f"Error in audio processing pipeline: {str(e)}")
+            # In case of a failure in transcription, temp_file_path might not exist
+            # but we can try to clean it up just in case.
+            if 'temp_file_path' in locals() and temp_file_path:
+                cleanup_temp_file(temp_file_path)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error processing audio file: {str(e)}"
+            )
+
     # =============================================================================
     # FILE MANAGEMENT METHODS
     # =============================================================================
@@ -138,7 +187,35 @@ class AudioService:
                 detail=f"Failed to save audio file: {str(e)}"
             )
     
+    def delete_audio(self, audio_id: str, user_id: str):
+        """
+        Deletes an audio file record and the physical file.
+        """
+        audio_record = self.audio_repo.find_by_id(audio_id)
+        if not audio_record:
+            raise HTTPException(status_code=404, detail="Audio record not found")
 
+        # Optional: Check if the user is authorized to delete this file
+        if str(audio_record['user_id']) != user_id:
+            raise HTTPException(status_code=403, detail="User not authorized to delete this audio file")
+
+        # Delete file from storage
+        try:
+            file_path = Path(audio_record['file_path'])
+            if file_path.exists():
+                os.remove(file_path)
+                self.logger.info(f"Deleted audio file: {file_path}")
+        except Exception as e:
+            # Log error but proceed to delete DB record
+            self.logger.error(f"Error deleting audio file {audio_record['file_path']}: {e}")
+
+        # Delete record from database
+        deleted = self.audio_repo.delete(audio_id)
+        if not deleted:
+            # This might happen if there's a race condition, but it's good to handle.
+            raise HTTPException(status_code=404, detail="Audio record could not be deleted from database")
+        
+        return {"message": "Audio file deleted successfully"}
     
     # Validation is now handled by file_utils.validate_audio_file
     
