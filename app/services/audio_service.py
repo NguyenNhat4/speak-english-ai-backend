@@ -36,13 +36,15 @@ gemini_model = genai.GenerativeModel("gemini-1.5-flash")
 
 logger = logging.getLogger(__name__)
 
-# Define valid audio file extensions
-VALID_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac']
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
-
-# Create uploads directory if it doesn't exist
-UPLOAD_DIR = Path("app/uploads")
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+# Import file utilities
+from app.utils.file_utils import (
+    validate_audio_file,
+    save_uploaded_file,
+    cleanup_temp_file,
+    create_temp_file,
+    get_file_size,
+    UPLOAD_DIR
+)
 
 
 class ModelPool:
@@ -116,14 +118,19 @@ class AudioService:
             HTTPException: If file saving fails
         """
         try:
-            # Validate the audio file
-            self.validate_audio_file(file)
+            # Save the file using centralized utility
+            file_path = save_uploaded_file(file, user_id, "audio")
             
-            # Save the file using internal method
-            file_path, audio_model = self._save_audio_file_internal(file, user_id)
+            # Create audio record via the repository
+            created_audio = self.audio_repo.create_audio(
+                user_id=user_id,
+                filename=file.filename,
+                file_path=str(file_path),
+                language="en-US"  # Default language
+            )
             
             # The audio_id is now part of the returned model from the repo
-            audio_id = str(audio_model['_id'])
+            audio_id = str(created_audio['_id'])
             
             self.logger.info(f"Successfully saved audio file for user {user_id}: {audio_id}")
             return audio_id
@@ -135,117 +142,11 @@ class AudioService:
                 detail=f"Failed to save audio file: {str(e)}"
             )
     
-    def _save_audio_file_internal(self, audio_file: UploadFile, user_id: str) -> Tuple[str, Dict[str, Any]]:
-        """
-        Internal method to save an audio file to disk and create a database record.
-        
-        Args:
-            audio_file: The audio file to save
-            user_id: ID of the user who owns the file
-            
-        Returns:
-            Tuple containing the file path and the created audio document from the repository.
-            
-        Raises:
-            Exception: If file saving fails
-        """
-        # Create user directory if it doesn't exist
-        user_dir = self.upload_dir / str(user_id)
-        user_dir.mkdir(exist_ok=True)
-        
-        # Generate unique filename
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = audio_file.filename or "unknown_file"
-        safe_filename = f"{timestamp}_{filename.replace(' ', '_')}"
-        file_path = user_dir / safe_filename
-        
-        # Save the file
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(audio_file.file, buffer)
-        
-        # Create audio record via the repository
-        created_audio = self.audio_repo.create_audio(
-            user_id=user_id,
-            filename=audio_file.filename,
-            file_path=str(file_path),
-            language="en-US"  # Default language
-        )
-        
-        return str(file_path), created_audio
+
     
-    def validate_audio_file(self, file: UploadFile) -> bool:
-        """
-        Validate audio file format and size.
-        
-        Args:
-            file (UploadFile): The audio file to validate
-            
-        Returns:
-            bool: True if validation passes
-            
-        Raises:
-            HTTPException: If validation fails
-        """
-        try:
-            # Check if file is provided
-            if not file:
-                raise HTTPException(
-                    status_code=400,
-                    detail="No audio file provided"
-                )
-            
-            # Check file extension
-            file_extension = Path(file.filename).suffix.lower()
-            if file_extension not in VALID_AUDIO_EXTENSIONS:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid audio format. Supported formats: {', '.join(VALID_AUDIO_EXTENSIONS)}"
-                )
-            
-            # Check file size if possible
-            if hasattr(file.file, 'seek') and hasattr(file.file, 'tell'):
-                file.file.seek(0, 2)  # Seek to end
-                file_size = file.file.tell()
-                file.file.seek(0)  # Reset to beginning
-                
-                if file_size > MAX_FILE_SIZE:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"File size too large. Maximum size: {MAX_FILE_SIZE // 1024 // 1024}MB"
-                    )
-            
-            # Check filename length
-            if len(file.filename) > 255:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Filename too long"
-                )
-            
-            self.logger.debug(f"Audio file validation passed for: {file.filename}")
-            return True
-            
-        except HTTPException:
-            raise
-        except Exception as e:
-            self.logger.error(f"Audio file validation error: {str(e)}")
-            raise HTTPException(
-                status_code=400,
-                detail=f"File validation failed: {str(e)}"
-            )
+    # Validation is now handled by file_utils.validate_audio_file
     
-    def cleanup_temp_file(self, file_path: Optional[str]) -> None:
-        """
-        Clean up temporary files to prevent disk space issues.
-        
-        Args:
-            file_path (Optional[str]): Path to the temporary file to delete
-        """
-        if file_path and Path(file_path).exists():
-            try:
-                Path(file_path).unlink()
-                self.logger.debug(f"Cleaned up temporary file: {file_path}")
-            except Exception as e:
-                self.logger.warning(f"Failed to clean up temporary file {file_path}: {str(e)}")
+    # cleanup_temp_file is now handled by file_utils.cleanup_temp_file
     
     # =============================================================================
     # TRANSCRIPTION METHODS
