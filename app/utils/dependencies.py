@@ -13,6 +13,7 @@ from app.services.ai_service import AIService
 from app.services.user_service import UserService
 from app.services.message_service import MessageService
 from app.services.tts_service import TTSService
+from app.services.image_description_service import ImageDescriptionService
 from app.repositories.audio_repository import AudioRepository
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.feedback_repository import FeedbackRepository
@@ -53,6 +54,11 @@ def get_ai_service() -> AIService:
 def get_user_service() -> UserService:
     """Get UserService instance."""
     return UserService()
+
+
+def get_image_description_service() -> ImageDescriptionService:
+    """Get ImageDescriptionService instance."""
+    return ImageDescriptionService()
 
 
 def get_audio_repository() -> AudioRepository:
