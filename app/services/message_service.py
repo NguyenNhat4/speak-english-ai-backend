@@ -1,6 +1,6 @@
 import logging
 from fastapi import Depends, HTTPException, BackgroundTasks
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from app.services.conversation_service import ConversationService
 from app.services.feedback_service import FeedbackService
@@ -15,17 +15,17 @@ logger = logging.getLogger(__name__)
 class MessageService:
     def __init__(
         self,
-        conversation_service: ConversationService = Depends(),
-        feedback_service: FeedbackService = Depends(),
-        ai_service: AIService = Depends(),
-        message_repo: MessageRepository = Depends(),
-        audio_repo: AudioRepository = Depends(),
+        conversation_service: Optional[ConversationService] = None,
+        feedback_service: Optional[FeedbackService] = None,
+        ai_service: Optional[AIService] = None,
+        message_repo: Optional[MessageRepository] = None,
+        audio_repo: Optional[AudioRepository] = None,
     ):
-        self.conversation_service = conversation_service
-        self.feedback_service = feedback_service
-        self.ai_service = ai_service
-        self.message_repo = message_repo
-        self.audio_repo = audio_repo
+        self.conversation_service = conversation_service or ConversationService()
+        self.feedback_service = feedback_service or FeedbackService()
+        self.ai_service = ai_service or AIService()
+        self.message_repo = message_repo or MessageRepository()
+        self.audio_repo = audio_repo or AudioRepository()
 
     async def process_user_message(
         self,

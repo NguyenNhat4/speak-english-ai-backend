@@ -1,46 +1,44 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from typing import Dict, Any
 
 from app.services.tts_service import TTSService
-from app.utils.auth import get_current_user
+from app.utils.dependencies import get_tts_service
 
 router = APIRouter(
     prefix="/tts",
     tags=["tts"]
 )
 
-@router.get("/messages/{message_id}/speech", response_class=StreamingResponse)
-async def get_ai_message_as_speech_stream( 
+@router.get("/speech/{message_id}", response_class=StreamingResponse)
+async def get_speech_for_message(
     message_id: str,
-    tts_service: TTSService = Depends(),
-    current_user: dict = Depends(get_current_user)
+    tts_service: TTSService = Depends(get_tts_service),
 ):
     """
-    Retrieves an AI message's text, converts it to speech, and streams the audio.
+    Generate speech for a specific AI message.
     """
     return await tts_service.get_speech_for_message(message_id)
 
-@router.get("/demospeech", response_class=StreamingResponse)
-async def get_demo_speech_stream(
-    message: str = "Hello, this is a demonstration of the text to speech service.",
-    tts_service: TTSService = Depends()
-):
-    """
-    Generates a demo audio stream from the provided text.
-    """
-    return await tts_service.synthesize_demo_speech(message)
-
-@router.get("/messages/{message_id}/voice_context", response_model=Dict[str, Any])
+@router.get("/voice-context/{message_id}", response_model=dict)
 def get_voice_context(
     message_id: str,
-    tts_service: TTSService = Depends(),
-    current_user: dict = Depends(get_current_user)
+    tts_service: TTSService = Depends(get_tts_service)
 ):
     """
-    Retrieves the voice type and latest AI message for the associated conversation.
+    Get voice context for a conversation based on a message ID.
     """
     return tts_service.get_voice_context(message_id)
+
+@router.get("/demo-speech", response_class=StreamingResponse)
+async def get_demo_speech(
+    text: str = Query(..., min_length=1, max_length=250),
+    tts_service: TTSService = Depends(get_tts_service),
+):
+    """
+    Generate a demo speech with a default voice.
+    """
+    return await tts_service.synthesize_demo_speech(text)
 
 # POST /tts/synthesize - Synthesize text to speech (to be implemented)
 # This endpoint will handle direct text-to-speech conversion

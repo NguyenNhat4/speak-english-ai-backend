@@ -30,13 +30,13 @@ class TTSService:
     
     def __init__(
         self,
-        message_repo: MessageRepository = Depends(),
-        conversation_service: ConversationService = Depends()
+        message_repo: Optional[MessageRepository] = None,
+        conversation_service: Optional[ConversationService] = None
     ):
         """Initialize the TTS service."""
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.message_repo = message_repo
-        self.conversation_service = conversation_service
+        self.message_repo = message_repo or MessageRepository()
+        self.conversation_service = conversation_service or ConversationService()
     
     async def get_speech_for_message(self, message_id: str) -> StreamingResponse:
         """

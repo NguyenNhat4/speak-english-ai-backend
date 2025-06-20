@@ -4,6 +4,7 @@ from typing import List, Dict, Any
 from app.schemas.conversation import ConversationCreate, ConversationResponse, ConversationUpdate
 from app.utils.auth import get_current_user
 from app.services.conversation_service import ConversationService
+from app.utils.dependencies import get_conversation_service
 
 router = APIRouter(
     prefix="/conversations",
@@ -14,7 +15,7 @@ router = APIRouter(
 def create_conversation(
     convo_data: ConversationCreate, 
     current_user: dict = Depends(get_current_user),
-    conversation_service: ConversationService = Depends()
+    conversation_service: ConversationService = Depends(get_conversation_service)
 ):
     """
     Create a new conversation and generate an initial AI response.
@@ -25,7 +26,7 @@ def create_conversation(
 @router.get("", response_model=List[ConversationResponse])
 def get_user_conversations(
     current_user: dict = Depends(get_current_user),
-    conversation_service: ConversationService = Depends()
+    conversation_service: ConversationService = Depends(get_conversation_service)
 ):
     """
     Get all conversations for the current user.
@@ -36,7 +37,7 @@ def get_user_conversations(
 @router.get("/{conversation_id}", response_model=ConversationResponse)
 def get_conversation(
     conversation_id: str,
-    conversation_service: ConversationService = Depends()
+    conversation_service: ConversationService = Depends(get_conversation_service)
 ):
     """
     Get a specific conversation by its ID.
@@ -47,7 +48,7 @@ def get_conversation(
 def update_conversation(
     conversation_id: str,
     update_data: ConversationUpdate,
-    conversation_service: ConversationService = Depends()
+    conversation_service: ConversationService = Depends(get_conversation_service)
 ):
     """
     Update a conversation's metadata.
@@ -57,7 +58,7 @@ def update_conversation(
 @router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_conversation(
     conversation_id: str,
-    conversation_service: ConversationService = Depends()
+    conversation_service: ConversationService = Depends(get_conversation_service)
 ):
     """
     Delete a conversation.

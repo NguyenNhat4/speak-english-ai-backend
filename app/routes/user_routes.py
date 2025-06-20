@@ -5,6 +5,7 @@ from typing import List
 from app.schemas.user import UserCreate, UserResponse, UserUpdate, UserRegisterResponse, Token
 from app.services.user_service import UserService
 from app.utils.auth import get_current_user
+from app.utils.dependencies import get_user_service
 
 router = APIRouter()
 
@@ -20,14 +21,14 @@ def get_current_admin_user(current_user: dict = Depends(get_current_user)) -> di
     return current_user
 
 @router.post("/register", response_model=UserRegisterResponse, status_code=status.HTTP_201_CREATED)
-def register_user(user_create: UserCreate, user_service: UserService = Depends()):
+def register_user(user_create: UserCreate, user_service: UserService = Depends(get_user_service)):
     """
     Register a new user and return user info with an authentication token.
     """
     return user_service.register_user(user_create)
 
 @router.post("/login", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), user_service: UserService = Depends()):
+def login(form_data: OAuth2PasswordRequestForm = Depends(), user_service: UserService = Depends(get_user_service)):
     """
     OAuth2 compatible token login, get an access token for future requests.
     """
@@ -36,7 +37,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), user_service: UserSe
 @router.get("/me", response_model=UserResponse)
 def get_user_profile(
     current_user: dict = Depends(get_current_user),
-    user_service: UserService = Depends()
+    user_service: UserService = Depends(get_user_service)
 ):
     """
     Get current user's profile.
@@ -48,7 +49,7 @@ def get_user_profile(
 def update_user_profile(
     user_update: UserUpdate, 
     current_user: dict = Depends(get_current_user), 
-    user_service: UserService = Depends()
+    user_service: UserService = Depends(get_user_service)
 ):
     """
     Update current user's profile.
@@ -59,7 +60,7 @@ def update_user_profile(
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user_profile(
     current_user: dict = Depends(get_current_user), 
-    user_service: UserService = Depends()
+    user_service: UserService = Depends(get_user_service)
 ):
     """
     Delete current user's profile (soft delete).
@@ -72,7 +73,7 @@ def delete_user_profile(
 def get_users(
     skip: int = 0, 
     limit: int = 100, 
-    user_service: UserService = Depends(), 
+    user_service: UserService = Depends(get_user_service), 
     admin_user: dict = Depends(get_current_admin_user)
 ):
     """

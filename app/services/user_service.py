@@ -16,8 +16,8 @@ from app.config.settings import settings
 logger = logging.getLogger(__name__)
 
 class UserService:
-    def __init__(self, user_repo: UserRepository = UserRepository()):
-        self.user_repo = user_repo
+    def __init__(self, user_repo: Optional[UserRepository] = None):
+        self.user_repo = user_repo or UserRepository()
 
     def get_users(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
         """
