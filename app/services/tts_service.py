@@ -79,14 +79,13 @@ class TTSService:
             headers["Accept"] = "audio/mpeg"
 
         client = httpx.AsyncClient(timeout=60.0)
+        response_stream = None
         try:
             request = client.build_request("POST", tts_request_url, json=payload, headers=headers)
             response_stream = await client.send(request, stream=True)
 
             if response_stream.status_code != 200:
                 error_content = await response_stream.aread()
-                await response_stream.aclose()
-                await client.aclose()
                 error_detail = f"TTS Service error ({response_stream.status_code}): {error_content.decode()}"
                 raise HTTPException(status_code=response_stream.status_code, detail=error_detail)
             
@@ -94,19 +93,28 @@ class TTSService:
                 try:
                     async for chunk in current_response.aiter_bytes():
                         yield chunk
+                except httpx.StreamClosed as e:
+                    logger.warning(f"TTS stream was closed gracefully: {e}")
+                except Exception as e:
+                    logger.error(f"An error occurred during TTS streaming: {e}", exc_info=True)
                 finally:
-                    if not current_response.is_closed:
+                    if current_response and not current_response.is_closed:
                         await current_response.aclose()
-                    await client_to_close.aclose()
+                    if client_to_close:
+                        await client_to_close.aclose()
 
             media_type = response_stream.headers.get("content-type", "audio/mpeg")
             return StreamingResponse(generator_func(response_stream, client), media_type=media_type)
 
         except (httpx.TimeoutException, httpx.RequestError) as e:
+            if response_stream and not response_stream.is_closed:
+                await response_stream.aclose()
             await client.aclose()
             status_code = 504 if isinstance(e, httpx.TimeoutException) else 503
             raise HTTPException(status_code=status_code, detail=f"TTS Service communication error: {str(e)}")
         except Exception as e:
+            if response_stream and not response_stream.is_closed:
+                await response_stream.aclose()
             await client.aclose()
             if isinstance(e, HTTPException):
                 raise
