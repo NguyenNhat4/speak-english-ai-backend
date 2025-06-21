@@ -11,18 +11,19 @@ import shutil
 import tempfile
 import json
 import time
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Dict, Any, Optional, Tuple, List, Protocol, runtime_checkable
 from pathlib import Path
 from datetime import datetime
 from fastapi import HTTPException, UploadFile, Depends
 from bson import ObjectId
 import inspect
+import torch
+import whisper
 
 from app.repositories.audio_repository import AudioRepository
 from app.models.audio import Audio
 from app.utils.transcription_error_message import TranscriptionErrorMessages
 from app.config.settings import settings
-from app.utils.speech_service import transcribe_file
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,54 @@ from app.utils.file_utils import (
     get_file_size,
     UPLOAD_DIR
 )
+
+
+@runtime_checkable
+class SpeechToTextService(Protocol):
+    """A protocol for speech-to-text services."""
+    def transcribe(self, audio_file_path: Path, language_code: str = "en-US") -> str:
+        """Transcribes an audio file."""
+        ...
+
+class WhisperSpeechService(SpeechToTextService):
+    """Speech-to-text service using Whisper."""
+    def __init__(self, model):
+        self.model = model
+
+    def transcribe(self, audio_file_path: Path, language_code: str = "en-US") -> str:
+        """Transcribes audio using the Whisper model."""
+        try:
+            start_time = time.time()
+            result = self.model.transcribe(str(audio_file_path), language=language_code)
+            end_time = time.time()
+            logger.info(f"Whisper transcription took {end_time - start_time:.2f} seconds")
+            return result.get("text", "").strip()
+        except Exception as e:
+            logger.error(f"Whisper transcription failed: {e}")
+            raise
+
+class GoogleSpeechToTextService(SpeechToTextService):
+    """Speech-to-text service using Google Cloud Speech-to-Text as a fallback."""
+
+    def transcribe(self, audio_file_path: Path, language_code: str = "en-US") -> str:
+        """Transcribes audio using Google Cloud Speech-to-Text."""
+        try:
+            from google.cloud import speech
+            
+            client = speech.SpeechClient()
+            
+            with open(audio_file_path, "rb") as audio_file_content:
+                content = audio_file_content.read()
+            
+            audio = speech.RecognitionAudio(content=content)
+            config = speech.RecognitionConfig(language_code=language_code)
+            
+            response = client.recognize(config=config, audio=audio)
+            return " ".join([res.alternatives[0].transcript for res in response.results]).strip()
+                
+        except Exception as e:
+            logger.warning(f"Google Cloud Speech-to-Text transcription failed: {str(e)}")
+            raise
 
 
 class AudioService:
@@ -60,7 +109,40 @@ class AudioService:
         self.upload_dir = Path("app/uploads")
         self.upload_dir.mkdir(parents=True, exist_ok=True)
         self.audio_repo = audio_repo or AudioRepository()
+        self.whisper_model = self._load_whisper_model()
     
+    def _load_whisper_model(self):
+        model_size = "large-v3-turbo"
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if device == "cuda":
+            logger.info(f"GPU device: {torch.cuda.get_device_name(0)}")
+        return whisper.load_model(model_size, device=device)
+
+    def _transcribe_file(self, audio_file: Path, language_code: str = "en-US", use_whisper: bool = True) -> str:
+        """
+        Transcribes an audio file using a primary service and falls back to another.
+        """
+        transcription = ""
+        try:
+            primary_service = WhisperSpeechService(self.whisper_model) if use_whisper else GoogleSpeechToTextService()
+            transcription = primary_service.transcribe(audio_file, language_code)
+        except Exception as e:
+            logger.error(f"Primary transcription failed for {audio_file}: {e}")
+
+        if not transcription:
+            logger.info(f"Primary transcription was empty or failed, attempting fallback for {audio_file}")
+            try:
+                fallback_service = GoogleSpeechToTextService() if use_whisper else WhisperSpeechService(self.whisper_model)
+                transcription = fallback_service.transcribe(audio_file, language_code)
+            except Exception as fallback_e:
+                logger.error(f"Fallback transcription failed for {audio_file}: {fallback_e}")
+                return TranscriptionErrorMessages.DEFAULT_FALLBACK_ERROR.value
+                
+        if not transcription:
+            return TranscriptionErrorMessages.EMPTY_TRANSCRIPTION.value
+            
+        return transcription
+
     def process_and_transcribe_audio(self, file: UploadFile, user_id: str) -> dict:
         """
         Orchestrates the audio processing pipeline: transcription, saving, and cleanup.
@@ -209,7 +291,7 @@ class AudioService:
         try:
             # Create temporary file and transcribe
             temp_file_path = create_temp_file(file)
-            transcription = transcribe_file(temp_file_path, language_code)
+            transcription = self._transcribe_file(temp_file_path, language_code)
             self.logger.debug(f"Transcription completed with length: {len(transcription) if transcription else 0}")
             
             return transcription, str(temp_file_path)

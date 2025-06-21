@@ -11,8 +11,9 @@ import logging
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from fastapi import HTTPException
+import google.generativeai as genai
 
-from app.utils.gemini import generate_response
+from app.config.settings import settings
 from app.utils.tts_client_service import pick_suitable_voice_name
 from app.models.results.feedback_result import FeedbackResult
 
@@ -47,7 +48,27 @@ class AIService:
     def __init__(self):
         """Initialize the AI service."""
         self.logger = logging.getLogger(self.__class__.__name__)
-    
+        # Configure Gemini AI with centralized settings
+        genai.configure(api_key=settings.get_gemini_api_key())
+        # Initialize the Gemini model from settings
+        self.gemini_model = genai.GenerativeModel(settings.gemini_model_name)
+
+    def _generate_response(self, prompt: str):
+        """
+        Generate a response from the Gemini AI model based on the provided prompt.
+        
+        Args:
+            prompt (str): The input text prompt to generate a response for.
+        
+        Returns:
+            str: The generated response text from the Gemini model.
+            
+        Raises:
+            Exception: If there are any issues with the API call or response generation.
+        """
+        response = self.gemini_model.generate_content(prompt)
+        return response.text
+
     def refine_conversation_context(
         self, 
         user_role: str, 
@@ -116,7 +137,7 @@ class AIService:
             HTTPException: If AI response generation fails
         """
         try:
-            response = generate_response(prompt)
+            response = self._generate_response(prompt)
             if not response or not response.strip():
                 raise AIServiceError("Empty response from AI service")
                 
@@ -150,7 +171,7 @@ class AIService:
             HTTPException: If AI response generation fails
         """
         try:
-            response = generate_response(prompt)
+            response = self._generate_response(prompt)
             if not response or not response.strip():
                 raise AIServiceError("Empty response from AI service")
                 
@@ -194,7 +215,7 @@ class AIService:
             prompt = self._build_feedback_prompt(transcription, context)
             
             # Generate AI feedback
-            response = generate_response(prompt)
+            response = self._generate_response(prompt)
             
             if not response or not response.strip():
                 raise AIServiceError("Empty feedback response from AI")

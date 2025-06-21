@@ -1,5 +1,5 @@
 ---
-description: use this best pratice to generate commit messages ( use this everytime you commit) whenever commit
+description: use this best pratice to generate commit messages 
 globs: 
 alwaysApply: false
 ---
