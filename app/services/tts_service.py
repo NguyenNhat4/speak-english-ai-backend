@@ -9,16 +9,17 @@ import logging
 from typing import Dict, Any, Optional, Generator
 from fastapi import HTTPException, Depends
 from fastapi.responses import StreamingResponse
+import httpx
+import random
 
-from app.utils.tts_client_service import (
-    get_speech_from_tts_service,
-    pick_suitable_voice_name
-)
+from app.config.settings import settings
 from app.repositories.message_repository import MessageRepository
 from app.services.conversation_service import ConversationService
 
 logger = logging.getLogger(__name__)
 
+MALE_VOICES = ["im_nicola", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael", "am_onyx", "am_puck", "am_v0adam", "hm_omega", "bm_daniel", "bm_fable", "bm_george", "bm_lewis", "bm_v0george", "bm_v0lewis"]
+FEMALE_VOICES = ["af_aoede", "af_heart", "bf_v0isabella"]
 
 class TTSService:
     """
@@ -37,6 +38,95 @@ class TTSService:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.message_repo = message_repo or MessageRepository()
         self.conversation_service = conversation_service or ConversationService()
+        self.tts_backend_base_url = settings.tts_backend_base_url
+    
+    async def _get_speech_from_tts_service(
+        self,
+        text_to_speak: str,
+        voice_name: str,
+        response_format: str = "mp3",
+        speed: float = 1.2,
+        lang_code: str = "en-US"
+    ):
+        """
+        Calls the external TTS Service to convert text to speech and streams the audio.
+        """
+        tts_request_url = f"{self.tts_backend_base_url}/v1/audio/speech"
+        payload = {
+            "model": "kokoro",
+            "input": text_to_speak,
+            "voice": voice_name,
+            "response_format": response_format,
+            "download_format": response_format,
+            "speed": speed,
+            "stream": True,
+            "return_download_link": False,
+            "lang_code": lang_code,
+            "normalization_options": {
+                "normalize": True,
+                "unit_normalization": False,
+                "url_normalization": True,
+                "email_normalization": True,
+                "optional_pluralization_normalization": True,
+                "phone_normalization": True
+            }
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": f"audio/{response_format}" if response_format != "pcm" else "application/octet-stream"
+        }
+        if response_format == "mp3":
+            headers["Accept"] = "audio/mpeg"
+
+        client = httpx.AsyncClient(timeout=60.0)
+        response_stream = None
+        try:
+            request = client.build_request("POST", tts_request_url, json=payload, headers=headers)
+            response_stream = await client.send(request, stream=True)
+
+            if response_stream.status_code != 200:
+                error_content = await response_stream.aread()
+                error_detail = f"TTS Service error ({response_stream.status_code}): {error_content.decode()}"
+                raise HTTPException(status_code=response_stream.status_code, detail=error_detail)
+            
+            async def generator_func(current_response, client_to_close):
+                try:
+                    async for chunk in current_response.aiter_bytes():
+                        yield chunk
+                except httpx.StreamClosed as e:
+                    logger.warning(f"TTS stream was closed gracefully: {e}")
+                except Exception as e:
+                    logger.error(f"An error occurred during TTS streaming: {e}", exc_info=True)
+                finally:
+                    if current_response and not current_response.is_closed:
+                        await current_response.aclose()
+                    if client_to_close:
+                        await client_to_close.aclose()
+
+            media_type = response_stream.headers.get("content-type", "audio/mpeg")
+            return StreamingResponse(generator_func(response_stream, client), media_type=media_type)
+
+        except (httpx.TimeoutException, httpx.RequestError) as e:
+            if response_stream and not response_stream.is_closed:
+                await response_stream.aclose()
+            await client.aclose()
+            status_code = 504 if isinstance(e, httpx.TimeoutException) else 503
+            raise HTTPException(status_code=status_code, detail=f"TTS Service communication error: {str(e)}")
+        except Exception as e:
+            if response_stream and not response_stream.is_closed:
+                await response_stream.aclose()
+            await client.aclose()
+            if isinstance(e, HTTPException):
+                raise
+            raise HTTPException(status_code=500, detail=f"Unexpected error during TTS request: {str(e)}")
+
+    def _pick_suitable_voice_name(self, gender: str) -> str:
+        """   
+        Returns a random voice name based on the specified gender.
+        """
+        if "f" in gender.lower():
+            return random.choice(FEMALE_VOICES)
+        return random.choice(MALE_VOICES)
     
     async def get_speech_for_message(self, message_id: str) -> StreamingResponse:
         """
@@ -57,7 +147,7 @@ class TTSService:
         conversation_context = self.conversation_service.get_conversation_context(conversation_id)
         conversation_voice_type = conversation_context["conversation"].get("voice_type", "hm_omega")
         
-        return await get_speech_from_tts_service(
+        return await self._get_speech_from_tts_service(
             text_to_speak=ai_text,
             voice_name=conversation_voice_type,
             speed=1.3
@@ -67,7 +157,7 @@ class TTSService:
         """
         Generates a demo speech stream with a default voice.
         """
-        return await get_speech_from_tts_service(
+        return await self._get_speech_from_tts_service(
             text_to_speak=text,
             voice_name="hm_omega", # Default demo voice
             speed=1.3
@@ -136,7 +226,7 @@ class TTSService:
                 voice_name = "af_heart"  # Default voice
             
             # Generate streaming speech
-            streaming_response = await get_speech_from_tts_service(
+            streaming_response = await self._get_speech_from_tts_service(
                 text_to_speak=text,
                 voice_name=voice_name,
                 lang_code=language_code
@@ -184,7 +274,7 @@ class TTSService:
                 voice_name = "af_heart"  # Default voice
             
             # Generate speech (the actual TTS service doesn't use context directly)
-            streaming_response = await get_speech_from_tts_service(
+            streaming_response = await self._get_speech_from_tts_service(
                 text_to_speak=text,
                 voice_name=voice_name,
                 lang_code="en-US"
@@ -225,7 +315,7 @@ class TTSService:
                     detail="Valid gender (male/female) is required"
                 )
             
-            voice_name = pick_suitable_voice_name(gender)
+            voice_name = self._pick_suitable_voice_name(gender)
             
             self.logger.debug(f"Selected voice '{voice_name}' for gender: {gender}")
             return voice_name
