@@ -21,3 +21,4 @@ __pycache__/
 .cursor/rules/
 documents/
 ACTION_PLAN.md
+.cursorignore

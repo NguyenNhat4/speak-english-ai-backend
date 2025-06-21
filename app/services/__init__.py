@@ -8,13 +8,11 @@ specific domains of the application functionality.
 from .ai_service import AIService
 from .conversation_service import ConversationService
 from .audio_service import AudioService
-from .feedback_service import FeedbackService
 from .tts_service import TTSService
 
 __all__ = [
     "AIService",
     "ConversationService", 
     "AudioService",
-    "FeedbackService",
     "TTSService"
 ] 
