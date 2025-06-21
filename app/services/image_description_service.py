@@ -96,6 +96,9 @@ fluency. The output should be a direct description, not a story or interpretatio
 
     def get_practice_images(self) -> list:
         try:
+            # Ensure the images directory exists before trying to list its contents
+            IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+            
             if not os.listdir(IMAGES_DIR):
                 self._download_images_from_links()
 
