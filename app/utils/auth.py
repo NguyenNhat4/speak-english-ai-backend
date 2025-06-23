@@ -6,6 +6,9 @@ from typing import Optional
 from app.config.database import db
 from app.config.settings import settings
 from bson import ObjectId
+from app.services import provider
+from app.services.user_service import UserService
+from app.schemas.user import UserResponse as User
 
 # OAuth2 scheme for token authentication (points to the login endpoint)
 oauth2_scheme = OAuth2PasswordBearer(
@@ -40,3 +43,24 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
         expire = datetime.utcnow() + timedelta(minutes=settings.jwt_access_token_expire_minutes)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.get_secret_key(), algorithm=settings.jwt_algorithm)
+
+def get_current_active_user(
+    security_scopes: SecurityScopes,
+    token: str = Depends(oauth2_scheme),
+    user_service: UserService = Depends(provider.get_user_service)
+) -> User:
+    if security_scopes.scopes:
+        user_data = user_service.get_current_active_user(token, security_scopes.scopes)
+        return User(**user_data)
+    user_data = user_service.get_current_active_user(token, [])
+    return User(**user_data)
+
+def get_current_admin_user(
+    user: User = Security(get_current_active_user, scopes=["admin"])
+) -> User:
+    if user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The user does not have enough privileges"
+        )
+    return user
