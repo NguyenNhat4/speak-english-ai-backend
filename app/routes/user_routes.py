@@ -5,7 +5,6 @@ from typing import List
 from app.schemas.user import UserCreate, UserResponse, UserUpdate, UserRegisterResponse, Token
 from app.services.user_service import UserService
 from app.services import provider
-from app.utils.auth import get_current_active_user, get_current_admin_user
 
 router = APIRouter()
 
@@ -25,7 +24,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), user_service: UserSe
 
 @router.get("/me", response_model=UserResponse)
 async def get_user_profile(
-    current_user: UserResponse = Security(get_current_active_user, scopes=["user"])
+    current_user: UserResponse = Security(provider.get_current_active_user, scopes=["user"])
 ):
     """
     Get current user's profile.
@@ -35,7 +34,7 @@ async def get_user_profile(
 @router.put("/me", response_model=UserResponse)
 async def update_user_profile(
     user_update: UserUpdate, 
-    current_user: UserResponse = Security(get_current_active_user, scopes=["user"]),
+    current_user: UserResponse = Security(provider.get_current_active_user, scopes=["user"]),
     user_service: UserService = Depends(provider.get_user_service)
 ):
     """
@@ -46,7 +45,7 @@ async def update_user_profile(
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user_profile(
-    current_user: UserResponse = Security(get_current_active_user, scopes=["user"]),
+    current_user: UserResponse = Security(provider.get_current_active_user, scopes=["user"]),
     user_service: UserService = Depends(provider.get_user_service)
 ):
     """
@@ -61,7 +60,7 @@ def get_users(
     skip: int = 0, 
     limit: int = 100, 
     user_service: UserService = Depends(provider.get_user_service), 
-    admin_user: UserResponse = Depends(get_current_admin_user)
+    admin_user: UserResponse = Security(provider.get_current_admin_user, scopes=["admin"])
 ):
     """
     Get a list of users (for admin purposes).
