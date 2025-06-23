@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Security
 from typing import List, Dict, Any
 
 from app.schemas.conversation import ConversationCreate, ConversationResponse, ConversationUpdate
-from app.schemas.user import User
+from app.schemas.user import UserResponse
 from app.services import provider
 from app.services.conversation_service import ConversationService
 
@@ -14,7 +14,7 @@ router = APIRouter(
 @router.post("", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
 def create_conversation(
     convo_data: ConversationCreate, 
-    current_user: User = Depends(provider.get_current_user),
+    current_user: UserResponse = Security(provider.get_current_active_user, scopes=["user"]),
     conversation_service: ConversationService = Depends(provider.get_conversation_service)
 ):
     """
@@ -25,7 +25,7 @@ def create_conversation(
 
 @router.get("", response_model=List[ConversationResponse])
 def get_user_conversations(
-    current_user: User = Depends(provider.get_current_user),
+    current_user: UserResponse = Security(provider.get_current_active_user, scopes=["user"]),
     conversation_service: ConversationService = Depends(provider.get_conversation_service)
 ):
     """
