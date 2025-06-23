@@ -16,6 +16,7 @@ from app.config.settings import settings
 from jose import jwt, JWTError, ExpiredSignatureError
 
 logger = logging.getLogger(__name__)
+logger.info("UserService initialized")
 
 class UserService:
     def __init__(self, user_repo: Optional[UserRepository] = None):
