@@ -17,7 +17,7 @@ from app.models.conversation import Conversation
 from app.models.message import Message
 from app.schemas.conversation import ConversationCreate, ConversationResponse, ConversationUpdate
 from app.schemas.message import MessageResponse
-from app.services.ai_service import AIService
+from app.utils.ai_utils import refine_conversation_context
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +33,7 @@ class ConversationService:
     def __init__(
         self, 
         conversation_repo: Optional[ConversationRepository] = None, 
-        message_repo: Optional[MessageRepository] = None,
-        ai_service: Optional[AIService] = None
+        message_repo: Optional[MessageRepository] = None
     ):
         """
         Initialize the conversation service with repository dependencies.
@@ -42,12 +41,10 @@ class ConversationService:
         Args:
             conversation_repo: ConversationRepository instance
             message_repo: MessageRepository instance
-            ai_service: AIService instance
         """
         self.logger = logging.getLogger(self.__class__.__name__)
         self.conversation_repo = conversation_repo or ConversationRepository()
         self.message_repo = message_repo or MessageRepository()
-        self.ai_service = ai_service or AIService()
     
     def create_new_conversation(self, user_id: str, convo_data: ConversationCreate) -> Dict[str, Any]:
         """
@@ -55,7 +52,7 @@ class ConversationService:
         """
         self.validate_conversation_data(convo_data)
         
-        refined_context = self.ai_service.refine_conversation_context(
+        refined_context = refine_conversation_context(
             user_role=convo_data.user_role,
             ai_role=convo_data.ai_role,
             situation=convo_data.situation
