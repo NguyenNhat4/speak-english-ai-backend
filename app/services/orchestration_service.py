@@ -9,7 +9,6 @@ from app.services.ai_service import AIService, ConversationContext
 from app.repositories.audio_repository import AudioRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.feedback_repository import FeedbackRepository
-from app.utils.dependencies import get_conversation_service, get_ai_service, get_audio_repository, get_message_repository, get_feedback_repository
 from app.schemas.message import MessageResponse
 from app.utils.object_id import mongo_doc_to_schema
 import app.utils.ai_utils as ai_utils
@@ -19,11 +18,11 @@ logger = logging.getLogger(__name__)
 class OrchestrationService:
     def __init__(
         self,
-        conversation_service: ConversationService = Depends(get_conversation_service),
-        ai_service: AIService = Depends(get_ai_service),
-        audio_repo: AudioRepository = Depends(get_audio_repository),
-        message_repo: MessageRepository = Depends(get_message_repository),
-        feedback_repo: FeedbackRepository = Depends(get_feedback_repository)
+        conversation_service: ConversationService,
+        ai_service: AIService,
+        audio_repo: AudioRepository,
+        message_repo: MessageRepository,
+        feedback_repo: FeedbackRepository
     ):
         self.conversation_service = conversation_service
         self.ai_service = ai_service
@@ -54,7 +53,7 @@ class OrchestrationService:
         # Add the new user message to the history for the AI prompt
         messages.append(user_message_doc)
 
-        conversation_history_text = "\\n".join([f"{msg['sender']}: {msg['content']}" for msg in messages])
+        conversation_history_text = "\n".join([f"{msg['sender']}: {msg['content']}" for msg in messages])
 
         # Generate feedback
         context_for_feedback = ConversationContext(
