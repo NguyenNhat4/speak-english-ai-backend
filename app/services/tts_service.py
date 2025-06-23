@@ -10,16 +10,13 @@ from typing import Dict, Any, Optional, Generator
 from fastapi import HTTPException, Depends
 from fastapi.responses import StreamingResponse
 import httpx
-import random
 
 from app.config.settings import settings
 from app.repositories.message_repository import MessageRepository
-from app.services.conversation_service import ConversationService
+from app.repositories.conversation_repository import ConversationRepository
+from app.utils.voice_utils import pick_suitable_voice_name
 
 logger = logging.getLogger(__name__)
-
-MALE_VOICES = ["im_nicola", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael", "am_onyx", "am_puck", "am_v0adam", "hm_omega", "bm_daniel", "bm_fable", "bm_george", "bm_lewis", "bm_v0george", "bm_v0lewis"]
-FEMALE_VOICES = ["af_aoede", "af_heart", "bf_v0isabella"]
 
 class TTSService:
     """
@@ -32,12 +29,12 @@ class TTSService:
     def __init__(
         self,
         message_repo: Optional[MessageRepository] = None,
-        conversation_service: Optional[ConversationService] = None
+        conversation_repo: Optional[ConversationRepository] = None
     ):
         """Initialize the TTS service."""
         self.logger = logging.getLogger(self.__class__.__name__)
         self.message_repo = message_repo or MessageRepository()
-        self.conversation_service = conversation_service or ConversationService()
+        self.conversation_repo = conversation_repo or ConversationRepository()
         self.tts_backend_base_url = settings.tts_backend_base_url
     
     async def _get_speech_from_tts_service(
@@ -120,14 +117,6 @@ class TTSService:
                 raise
             raise HTTPException(status_code=500, detail=f"Unexpected error during TTS request: {str(e)}")
 
-    def _pick_suitable_voice_name(self, gender: str) -> str:
-        """   
-        Returns a random voice name based on the specified gender.
-        """
-        if "f" in gender.lower():
-            return random.choice(FEMALE_VOICES)
-        return random.choice(MALE_VOICES)
-    
     async def get_speech_for_message(self, message_id: str) -> StreamingResponse:
         """
         Generates a speech audio stream for a given AI message.
@@ -144,8 +133,11 @@ class TTSService:
             raise HTTPException(status_code=400, detail="AI Message has no text content to synthesize")
 
         conversation_id = str(message["conversation_id"])
-        conversation_context = self.conversation_service.get_conversation_context(conversation_id)
-        conversation_voice_type = conversation_context["conversation"].get("voice_type", "hm_omega")
+        conversation = self.conversation_repo.find_by_id(conversation_id)
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        
+        conversation_voice_type = conversation.get("voice_type", "hm_omega")
         
         return await self._get_speech_from_tts_service(
             text_to_speak=ai_text,
@@ -172,9 +164,11 @@ class TTSService:
             raise HTTPException(status_code=404, detail="Message not found")
 
         conversation_id = str(message["conversation_id"])
-        conversation_context = self.conversation_service.get_conversation_context(conversation_id)
-        conversation = conversation_context["conversation"]
-        messages = conversation_context["messages"]
+        conversation = self.conversation_repo.find_by_id(conversation_id)
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+            
+        messages = self.message_repo.get_messages_by_conversation(conversation_id)
         
         voice_type = conversation.get("voice_type", "hm_omega")
         
@@ -269,62 +263,26 @@ class TTSService:
                     detail="Text is required for speech generation"
                 )
             
-            # Use default voice if none provided
+            # Use voice from context if available, otherwise use default
             if not voice_name:
-                voice_name = "af_heart"  # Default voice
+                voice_name = conversation_context.get("voice_type")
+            if not voice_name:
+                voice_name = "af_heart"
             
-            # Generate speech (the actual TTS service doesn't use context directly)
+            # Generate streaming speech
             streaming_response = await self._get_speech_from_tts_service(
                 text_to_speak=text,
-                voice_name=voice_name,
-                lang_code="en-US"
+                voice_name=voice_name
             )
             
-            self.logger.debug(f"Generated contextual speech for text length: {len(text)}")
+            self.logger.debug(f"Generated speech with context for text length: {len(text)}")
             return streaming_response
             
         except Exception as e:
-            self.logger.error(f"Failed to generate contextual speech: {str(e)}")
+            self.logger.error(f"Failed to generate speech with context: {str(e)}")
             raise HTTPException(
                 status_code=500,
-                detail=f"Contextual speech generation failed: {str(e)}"
-            )
-    
-    def select_suitable_voice(
-        self,
-        gender: str,
-        language_code: str = "en-US"
-    ) -> str:
-        """
-        Select a suitable voice based on gender and language.
-        
-        Args:
-            gender (str): The desired gender (male/female)
-            language_code (str): The language code
-            
-        Returns:
-            str: The selected voice name
-            
-        Raises:
-            HTTPException: If voice selection fails
-        """
-        try:
-            if not gender or gender.lower() not in ['male', 'female']:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Valid gender (male/female) is required"
-                )
-            
-            voice_name = self._pick_suitable_voice_name(gender)
-            
-            self.logger.debug(f"Selected voice '{voice_name}' for gender: {gender}")
-            return voice_name
-            
-        except Exception as e:
-            self.logger.error(f"Failed to select suitable voice: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Voice selection failed: {str(e)}"
+                detail=f"Speech generation with context failed: {str(e)}"
             )
     
     def create_streaming_response(
@@ -333,28 +291,18 @@ class TTSService:
         filename: str = "speech.mp3"
     ) -> StreamingResponse:
         """
-        Create a streaming response for audio data.
+        Create a streaming response for the audio stream.
         
         Args:
-            audio_stream (Generator[bytes, None, None]): The audio stream
-            filename (str): The filename for the response
+            audio_stream (Generator[bytes, None, None]): The audio stream generator
+            filename (str): The filename for the streaming response
             
         Returns:
-            StreamingResponse: The streaming response object
+            StreamingResponse: The streaming response for the audio
         """
-        try:
-            return StreamingResponse(
-                audio_stream,
-                media_type="audio/mpeg",
-                headers={
-                    "Content-Disposition": f"attachment; filename={filename}",
-                    "Cache-Control": "no-cache"
-                }
-            )
-            
-        except Exception as e:
-            self.logger.error(f"Failed to create streaming response: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to create audio response: {str(e)}"
-            ) 
+        response = StreamingResponse(
+            audio_stream,
+            media_type="audio/mpeg"
+        )
+        response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response 
