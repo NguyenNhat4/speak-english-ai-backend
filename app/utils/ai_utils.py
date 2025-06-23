@@ -127,7 +127,7 @@ def refine_conversation_context(
         return data_json
         
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON response: {e}\\nResponse text: {cleaned_response}")
+        logger.error(f"Failed to parse JSON response: {e}\nResponse text: {cleaned_response}")
         raise HTTPException(
             status_code=500,
             detail="Failed to process AI response format"
