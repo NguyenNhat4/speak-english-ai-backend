@@ -22,8 +22,6 @@ from app.utils.auth import oauth2_scheme
 from fastapi import Depends
 from fastapi.security import SecurityScopes
 from typing import Dict, Any
-# Import the provider to resolve the self reference issue
-from app.services import provider
 
 class DependencyProviderService:
     def get_audio_repository(self) -> AudioRepository:
@@ -92,17 +90,17 @@ class DependencyProviderService:
     def get_current_active_user(
         self,
         security_scopes: SecurityScopes,
-        token: str = Depends(oauth2_scheme),
-        user_service: UserService = Depends(provider.get_user_service)
+        token: str = Depends(oauth2_scheme)
     ) -> Dict[str, Any]:
+        user_service = UserService(user_repo=self.get_user_repository())
         return user_service.get_user_from_token(token, security_scopes.scopes)
 
     def get_current_admin_user(
         self,
         security_scopes: SecurityScopes,
-        token: str = Depends(oauth2_scheme),
-        user_service: UserService = Depends(provider.get_user_service)
+        token: str = Depends(oauth2_scheme)
     ) -> Dict[str, Any]:
+        user_service = UserService(user_repo=self.get_user_repository())
         # Enforce "admin" scope
         if "admin" not in security_scopes.scopes:
             security_scopes.scopes.append("admin")
