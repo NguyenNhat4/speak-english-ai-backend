@@ -180,11 +180,17 @@ def build_conversation_prompt(conversation: Dict[str, Any], conversation_history
     Builds the prompt for the conversation given the context and history.
     """
     return f"""
-        You are {conversation['ai_role']}.
-        The user is {conversation['user_role']}.
-        The situation is: {conversation['situation']}.
+        You are an AI assistant helping a user practice their English.
+        Your role is: {conversation['ai_role']}.
+        The user's role is: {conversation['user_role']}.
+        The conversation scenario is: {conversation['situation']}.
+        
+        Please respond in English, staying in your role. Be natural and engaging.
+        
         Here is the conversation so far:
         {conversation_history}
+        
+        Now, it's your turn to speak.
         AI:
     """
 
