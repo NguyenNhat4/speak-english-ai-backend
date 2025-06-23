@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, status, UploadFile, File, Security
 from typing import List
 
 from app.schemas.audio import AudioResponse
+from app.schemas.user import UserResponse as User
 from app.services.audio_service import AudioService
-from app.services.user_service import UserService
 from app.services import provider
+from app.utils.auth import get_current_active_user
 
 router = APIRouter(
     prefix="/audio",
@@ -14,13 +15,13 @@ router = APIRouter(
 @router.post("/transcribe", response_model=dict)
 def transcribe_audio(
     audio_file: UploadFile = File(...),
-    current_user: dict = Security(provider.get_user_service().get_current_active_user, scopes=["user"]),
+    current_user: User = Security(get_current_active_user, scopes=["user"]),
     audio_service: AudioService = Depends(provider.get_audio_service),
 ):
     """
     Converts an uploaded audio file to text, saves it, and returns the result.
     """
-    user_id = str(current_user["_id"])
+    user_id = str(current_user.id)
     return audio_service.process_and_transcribe_audio(audio_file, user_id)
 
 @router.get("/{audio_id}", response_model=AudioResponse)
@@ -36,13 +37,13 @@ def get_audio(
 @router.delete("/{audio_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_audio(
     audio_id: str,
-    current_user: dict = Security(provider.get_user_service().get_current_active_user, scopes=["user"]),
+    current_user: User = Security(get_current_active_user, scopes=["user"]),
     audio_service: AudioService = Depends(provider.get_audio_service)
 ):
     """
     Delete an audio file and its record.
     """
-    user_id = str(current_user["_id"])
+    user_id = str(current_user.id)
     audio_service.delete_audio(audio_id, user_id)
     return None
 

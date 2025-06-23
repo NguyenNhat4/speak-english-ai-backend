@@ -2,10 +2,11 @@ from fastapi import APIRouter, Depends, status, BackgroundTasks, Security
 from typing import List, Dict, Any
 
 from app.schemas.message import MessageResponse
+from app.schemas.user import UserResponse as User
 from app.services.message_service import MessageService
-from app.services.user_service import UserService
 from app.services.orchestration_service import OrchestrationService
 from app.services import provider
+from app.utils.auth import get_current_active_user
 
 router = APIRouter(
     tags=["messages"]
@@ -15,7 +16,7 @@ router = APIRouter(
 async def add_message_and_get_response(
     conversation_id: str,
     audio_id: str,
-    current_user: dict = Security(provider.get_user_service().get_current_active_user, scopes=["user"]),
+    current_user: User = Security(get_current_active_user, scopes=["user"]),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     orchestration_service: OrchestrationService = Depends(provider.get_orchestration_service),
 ):
@@ -23,7 +24,7 @@ async def add_message_and_get_response(
     Process a user's spoken message, add it to the conversation, and get an AI response.
     Triggers feedback generation in the background.
     """
-    user_id = str(current_user["_id"])
+    user_id = str(current_user.id)
     return await orchestration_service.process_user_message_flow(
         conversation_id, audio_id, user_id, background_tasks
     )

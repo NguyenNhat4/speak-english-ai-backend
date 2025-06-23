@@ -122,12 +122,8 @@ class UserService:
             "scope": " ".join(scopes)
         }
 
-    async def get_current_active_user(
-        self,
-        security_scopes: SecurityScopes,
-        token: str = Depends(oauth2_scheme)
-    ):
-        authenticate_value = f'Bearer scope="{security_scopes.scope_str}"'
+    def get_current_active_user(self, token: str, security_scopes: List[str]):
+        authenticate_value = f'Bearer scope="{ " ".join(security_scopes)}"'
         credentials_exception = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
@@ -153,7 +149,7 @@ class UserService:
         if user is None:
             raise credentials_exception
             
-        for scope in security_scopes.scopes:
+        for scope in security_scopes:
             if scope not in token_scopes:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
