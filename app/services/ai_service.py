@@ -138,39 +138,6 @@ class AIService:
         self.logger.info("Generated fallback feedback")
         return FeedbackResult(user_feedback=fallback_message)
     
-    def build_conversation_prompt(
-        self,
-        conversation_context: Dict[str, Any],
-        conversation_history: str
-    ) -> str:
-        """
-        Build a conversation prompt for the AI model.
-        
-        Args:
-            conversation_context: The conversation context
-            conversation_history: The history of the conversation
-            
-        Returns:
-            The conversation prompt
-        """
-        # Extract context
-        situation = conversation_context.get("situation", "general conversation")
-        ai_role = conversation_context.get("ai_role", "AI")
-        user_role = conversation_context.get("user_role", "user")
-
-        # Construct prompt
-        prompt = (
-            f"You are the {ai_role}. The user is the {user_role}. "
-            f"The situation is: {situation}\n\n"
-            f"Please continue the conversation naturally based on the history below, "
-            f"and don't be too verbose. Your response must be in Vietnamese, "
-            f"except for technical terms if necessary.\n\n"
-            f"{conversation_history}"
-        )
-        
-        self.logger.debug(f"Built conversation prompt with context: {situation}")
-        return prompt
-    
     def _validate_feedback_input(self, transcription: str) -> None:
         """
         Validate the input for feedback generation.
