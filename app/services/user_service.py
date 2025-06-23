@@ -5,13 +5,15 @@ User Service for handling all user-related business logic.
 import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Depends
+from fastapi.security import OAuth2PasswordBearer, SecurityScopes
 
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import UserCreate, UserUpdate
 from app.utils.security import hash_password, verify_password
-from app.utils.auth import create_access_token
+from app.utils.auth import create_access_token, oauth2_scheme
 from app.config.settings import settings
+from jose import jwt, JWTError, ExpiredSignatureError
 
 logger = logging.getLogger(__name__)
 
@@ -117,4 +119,45 @@ class UserService:
             "token_type": "bearer",
             "expires_in": settings.jwt_access_token_expire_minutes * 60,
             "scope": " ".join(scopes)
-        } 
+        }
+
+    async def get_current_active_user(
+        self,
+        security_scopes: SecurityScopes,
+        token: str = Depends(oauth2_scheme)
+    ):
+        authenticate_value = f'Bearer scope="{security_scopes.scope_str}"'
+        credentials_exception = HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": authenticate_value},
+        )
+        
+        try:
+            payload = jwt.decode(token, settings.get_secret_key(), algorithms=[settings.jwt_algorithm])
+            email: str = payload.get("sub")
+            if email is None:
+                raise credentials_exception
+            token_scopes = payload.get("scopes", [])
+        except ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired",
+                headers={"WWW-Authenticate": authenticate_value},
+            )
+        except JWTError:
+            raise credentials_exception
+        
+        user = self.user_repo.get_user_by_email(email)
+        if user is None:
+            raise credentials_exception
+            
+        for scope in security_scopes.scopes:
+            if scope not in token_scopes:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not enough permissions",
+                    headers={"WWW-Authenticate": authenticate_value},
+                )
+        
+        return user 
