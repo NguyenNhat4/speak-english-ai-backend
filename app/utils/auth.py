@@ -6,6 +6,9 @@ from typing import Optional
 from app.config.database import db
 from app.config.settings import settings
 from bson import ObjectId
+from app.services import provider
+from app.services.user_service import UserService
+from app.schemas.user import UserResponse as User
 
 # OAuth2 scheme for token authentication (points to the login endpoint)
 oauth2_scheme = OAuth2PasswordBearer(
@@ -41,68 +44,23 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.get_secret_key(), algorithm=settings.jwt_algorithm)
 
-
-
-
-async def get_current_user(
+def get_current_active_user(
     security_scopes: SecurityScopes,
-    token: str = Depends(oauth2_scheme)
-    
-):
-    
-    """
-    Verify the JWT token and retrieve the current user's information.
-    Also verifies that the user has the required scopes.
-    
-    Args:
-        security_scopes (SecurityScopes): Required scopes for the endpoint.
-        token (str): The JWT token from the request header.
-    
-    Returns:
-        dict: The current user's information from the database.
-    
-    Raises:
-        HTTPException: If the token is invalid, expired, or user lacks required scopes.
-    """
-    
-    authenticate_value = f'Bearer scope="{security_scopes.scope_str}"'
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": authenticate_value},
-    )
-    
-    try:
-        # Decode the JWT token
-        payload = jwt.decode(token, settings.get_secret_key(), algorithms=[settings.jwt_algorithm])
-        email: str = payload.get("sub")
-        if email is None:
-            raise credentials_exception
-            
-        # Get token scopes
-        token_scopes = payload.get("scopes", [])
-        
-    except ExpiredSignatureError:
+    token: str = Depends(oauth2_scheme),
+    user_service: UserService = Depends(provider.get_user_service)
+) -> User:
+    if security_scopes.scopes:
+        user_data = user_service.get_current_active_user(token, security_scopes.scopes)
+        return User(**user_data)
+    user_data = user_service.get_current_active_user(token, [])
+    return User(**user_data)
+
+def get_current_admin_user(
+    user: User = Security(get_current_active_user, scopes=["admin"])
+) -> User:
+    if user.role != "admin":
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired",
-            headers={"WWW-Authenticate": authenticate_value},
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The user does not have enough privileges"
         )
-    except JWTError:
-        raise credentials_exception
-    
-    # Find the user in the database
-    user = db.users.find_one({"email": email})
-    if user is None:
-        raise credentials_exception
-        
-    # Check for required scopes
-    for scope in security_scopes.scopes:
-        if scope not in token_scopes:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions",
-                headers={"WWW-Authenticate": authenticate_value},
-            )
-    
     return user

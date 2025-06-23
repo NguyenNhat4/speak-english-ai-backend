@@ -4,10 +4,9 @@ import json
 from pathlib import Path
 from fastapi import Depends, HTTPException
 import requests
-from google import genai
 
 from app.config.settings import settings
-from app.services.ai_service import AIService
+from app.utils.ai_utils import generate_ai_response_in_json_format, generate_image_description
 from app.repositories.image_description_repository import ImageDescriptionRepository
 from app.repositories.image_feedback_repository import ImageFeedbackRepository
 from app.schemas.image_description import ImageFeedbackRequest
@@ -18,14 +17,11 @@ IMAGES_DIR = Path(__file__).parent.parent / "uploads" / "images"
 class ImageDescriptionService:
     def __init__(
         self,
-        ai_service: AIService = Depends(),
         image_desc_repo: ImageDescriptionRepository = Depends(),
         image_feedback_repo: ImageFeedbackRepository = Depends(),
     ):
-        self.ai_service = ai_service
         self.image_desc_repo = image_desc_repo
         self.image_feedback_repo = image_feedback_repo
-        self.genai_client = genai.Client(api_key=settings.get_gemini_api_key())
         self.description_prompt = """ Generate a concise and objective description of the provided image, 
 suitable for a TOEIC picture description test. The description should be spoken aloud 
 in approximately 30-45 seconds. Focus on the following elements in this order: 
@@ -48,22 +44,6 @@ in the image. Do not make assumptions or inferences beyond what is clearly
 shown. Structure the description logically. Ensure grammatical accuracy and
 fluency. The output should be a direct description, not a story or interpretation
 """
-
-    def _generate_image_description(self, image_path: str) -> str:
-        """
-        Get a detailed description of the image using Google GenAI.
-        """
-        if not image_path:
-            raise ValueError("Image path must be provided.")
-        
-        my_file = self.genai_client.files.upload(file=image_path)
-        
-        response = self.genai_client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=[my_file, self.description_prompt],
-        )
-        
-        return response.text
 
     def _download_images_from_links(self):
         """
@@ -113,7 +93,7 @@ fluency. The output should be a direct description, not a story or interpretatio
                 image_url = f"/uploads/images/{image_file}"
                 if image_url not in saved_image_dict:
                     img_path = str(IMAGES_DIR / image_file)
-                    detail_description = self._generate_image_description(img_path)
+                    detail_description = generate_image_description(img_path, self.description_prompt)
                     
                     new_image_data = {
                         "name": image_url,
@@ -161,7 +141,7 @@ This JSON object must have the following exact structure:
 }}
 """
             try:
-                ai_response = self.ai_service.generate_ai_response_in_json_format(prompt)
+                ai_response = generate_ai_response_in_json_format(prompt)
                 data = json.loads(ai_response)
                 better_version = data.get("better_version", "Could not generate improved version")
                 explanation = data.get("explanation", "There was an error processing the feedback")
