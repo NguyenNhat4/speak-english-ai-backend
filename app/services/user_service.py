@@ -5,19 +5,22 @@ User Service for handling all user-related business logic.
 import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Depends
+from fastapi.security import OAuth2PasswordBearer, SecurityScopes
 
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import UserCreate, UserUpdate
 from app.utils.security import hash_password, verify_password
-from app.utils.auth import create_access_token
+from app.utils.auth import create_access_token, oauth2_scheme
 from app.config.settings import settings
+from jose import jwt, JWTError, ExpiredSignatureError
 
 logger = logging.getLogger(__name__)
+logger.info("UserService initialized")
 
 class UserService:
-    def __init__(self, user_repo: Optional[UserRepository] = None):
-        self.user_repo = user_repo or UserRepository()
+    def __init__(self, user_repo: UserRepository):
+        self.user_repo = user_repo
 
     def get_users(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
         """
@@ -117,4 +120,48 @@ class UserService:
             "token_type": "bearer",
             "expires_in": settings.jwt_access_token_expire_minutes * 60,
             "scope": " ".join(scopes)
-        } 
+        }
+
+    def get_user_from_token(self, token: Optional[str], required_scopes: List[str] = []) -> Dict[str, Any]:
+        """
+        Decode the JWT token, validate scopes, and return the user.
+        This is a regular method, not a dependency.
+        """
+        authenticate_value = f'Bearer scope="{ " ".join(required_scopes)}"'
+        credentials_exception = HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": authenticate_value},
+        )
+        
+        if token is None:
+            raise credentials_exception
+
+        try:
+            payload = jwt.decode(token, settings.get_secret_key(), algorithms=[settings.jwt_algorithm])
+            email: str = payload.get("sub")
+            if email is None:
+                raise credentials_exception
+            token_scopes = payload.get("scopes", [])
+        except ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired",
+                headers={"WWW-Authenticate": authenticate_value},
+            )
+        except JWTError:
+            raise credentials_exception
+        
+        user = self.user_repo.get_user_by_email(email)
+        if user is None:
+            raise credentials_exception
+            
+        for scope in required_scopes:
+            if scope not in token_scopes:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not enough permissions",
+                    headers={"WWW-Authenticate": authenticate_value},
+                )
+        
+        return user 

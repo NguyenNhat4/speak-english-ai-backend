@@ -10,7 +10,6 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 from bson import ObjectId
 from fastapi import HTTPException
-
 from app.repositories.base_repository import BaseRepository
 from app.models.user import User
 

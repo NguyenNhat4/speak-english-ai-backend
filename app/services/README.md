@@ -146,9 +146,7 @@ The service provides multiple fallback mechanisms:
 
 - `whisper` - OpenAI Whisper for offline transcription
 - `torch` - PyTorch for ML model support
-- `speech_recognition` - Google Speech API integration
 - `google-generativeai` - Gemini AI for feedback generation
-- `google-cloud-speech` - Enterprise speech services (optional)
 
 ## Testing
 
