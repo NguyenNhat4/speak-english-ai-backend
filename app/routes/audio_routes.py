@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, status, UploadFile, File, Security
 from typing import List
 
 from app.schemas.audio import AudioResponse
-from app.schemas.user import UserResponse as User
+from app.schemas.user import UserResponse
 from app.services.audio_service import AudioService
+from app.services.user_service import UserService
 from app.services import provider
-from app.utils.auth import get_current_active_user
 
 router = APIRouter(
     prefix="/audio",
@@ -15,7 +15,7 @@ router = APIRouter(
 @router.post("/transcribe", response_model=dict)
 def transcribe_audio(
     audio_file: UploadFile = File(...),
-    current_user: User = Security(get_current_active_user, scopes=["user"]),
+    current_user: UserResponse = Security(provider.get_current_active_user, scopes=["user"]),
     audio_service: AudioService = Depends(provider.get_audio_service),
 ):
     """
@@ -37,7 +37,7 @@ def get_audio(
 @router.delete("/{audio_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_audio(
     audio_id: str,
-    current_user: User = Security(get_current_active_user, scopes=["user"]),
+    current_user: UserResponse = Security(provider.get_current_active_user, scopes=["user"]),
     audio_service: AudioService = Depends(provider.get_audio_service)
 ):
     """

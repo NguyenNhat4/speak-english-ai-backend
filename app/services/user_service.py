@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 logger.info("UserService initialized")
 
 class UserService:
-    def __init__(self, user_repo: Optional[UserRepository] = None):
-        self.user_repo = user_repo or UserRepository()
+    def __init__(self, user_repo: UserRepository):
+        self.user_repo = user_repo
 
     def get_users(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
         """
@@ -122,14 +122,21 @@ class UserService:
             "scope": " ".join(scopes)
         }
 
-    def get_current_active_user(self, token: str, security_scopes: List[str]):
-        authenticate_value = f'Bearer scope="{ " ".join(security_scopes)}"'
+    def get_user_from_token(self, token: Optional[str], required_scopes: List[str] = []) -> Dict[str, Any]:
+        """
+        Decode the JWT token, validate scopes, and return the user.
+        This is a regular method, not a dependency.
+        """
+        authenticate_value = f'Bearer scope="{ " ".join(required_scopes)}"'
         credentials_exception = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": authenticate_value},
         )
         
+        if token is None:
+            raise credentials_exception
+
         try:
             payload = jwt.decode(token, settings.get_secret_key(), algorithms=[settings.jwt_algorithm])
             email: str = payload.get("sub")
@@ -149,7 +156,7 @@ class UserService:
         if user is None:
             raise credentials_exception
             
-        for scope in security_scopes:
+        for scope in required_scopes:
             if scope not in token_scopes:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,

@@ -2,11 +2,11 @@ from fastapi import APIRouter, Depends, status, BackgroundTasks, Security
 from typing import List, Dict, Any
 
 from app.schemas.message import MessageResponse
-from app.schemas.user import UserResponse as User
+from app.schemas.user import UserResponse
 from app.services.message_service import MessageService
+from app.services.user_service import UserService
 from app.services.orchestration_service import OrchestrationService
 from app.services import provider
-from app.utils.auth import get_current_active_user
 
 router = APIRouter(
     tags=["messages"]
@@ -16,7 +16,7 @@ router = APIRouter(
 async def add_message_and_get_response(
     conversation_id: str,
     audio_id: str,
-    current_user: User = Security(get_current_active_user, scopes=["user"]),
+    current_user: UserResponse = Security(provider.get_current_active_user, scopes=["user"]),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     orchestration_service: OrchestrationService = Depends(provider.get_orchestration_service),
 ):
