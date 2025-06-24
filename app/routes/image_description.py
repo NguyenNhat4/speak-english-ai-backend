@@ -4,8 +4,8 @@ from typing import List
 
 from app.services.image_description_service import ImageDescriptionService
 from app.schemas.image_description import ImageDescriptionResponse, ImageFeedbackRequest, ImageFeedbackResponse
-from app.utils.auth import get_current_user
-from app.utils.dependencies import get_image_description_service
+from app.services import provider
+from app.schemas.user import UserResponse
 
 router = APIRouter(
     prefix="/images",
@@ -14,7 +14,7 @@ router = APIRouter(
 
 @router.get("/practice", response_model=List[ImageDescriptionResponse])
 def get_practice_images(
-    service: ImageDescriptionService = Depends(get_image_description_service)
+    service: ImageDescriptionService = Depends(provider.get_image_description_service)
 ):
     """
     Returns a list of practice images with IDs and URLs.
@@ -25,7 +25,7 @@ def get_practice_images(
 @router.get("/{image_id}/file", response_class=FileResponse)
 def get_image_file(
     image_id: str,
-    service: ImageDescriptionService = Depends(get_image_description_service)
+    service: ImageDescriptionService = Depends(provider.get_image_description_service)
 ):
     """
     Returns the actual image file by its ID.
@@ -36,8 +36,8 @@ def get_image_file(
 @router.post("/feedback", response_model=ImageFeedbackResponse)
 def provide_feedback(
     feedback_request: ImageFeedbackRequest,
-    service: ImageDescriptionService = Depends(get_image_description_service),
-    current_user: dict = Depends(get_current_user) # Ensure user is authenticated
+    service: ImageDescriptionService = Depends(provider.get_image_description_service),
+    current_user: UserResponse = Depends(provider.get_current_active_user) # Ensure user is authenticated
 ):
     """
     Accepts user feedback on an image description and returns an improved version.
