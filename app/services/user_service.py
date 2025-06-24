@@ -7,7 +7,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 from fastapi import HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordBearer, SecurityScopes
-
+from app.schemas.user import Token
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import UserCreate, UserUpdate
 from app.utils.security import hash_password, verify_password
@@ -51,10 +51,10 @@ class UserService:
         
         # Combine user data with token for the response
         response_data = created_user.copy()
-        response_data.update(access_token)
+        response_data.update(access_token.model_dump())
         return response_data
 
-    def login_user(self, email: str, password: str) -> Dict[str, Any]:
+    def login_user(self, email: str, password: str) -> Token:
         """
         Authenticate a user and return an access token.
         """
@@ -105,7 +105,7 @@ class UserService:
             )
         return deleted_user
 
-    def create_auth_token(self, email: str, role: str = "user") -> Dict[str, Any]:
+    def create_auth_token(self, email: str, role: str = "user") -> Token:
         """
         Create an authentication token for a user.
         """
@@ -115,12 +115,13 @@ class UserService:
             data={"sub": email, "scopes": scopes},
             expires_delta=access_token_expires
         )
-        return {
-            "access_token": access_token,
-            "token_type": "bearer",
-            "expires_in": settings.jwt_access_token_expire_minutes * 60,
-            "scope": " ".join(scopes)
-        }
+        
+        return Token(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=settings.jwt_access_token_expire_minutes * 60,
+            scope=" ".join(scopes)
+        )
 
     def get_user_from_token(self, token: Optional[str], required_scopes: List[str] = []) -> Dict[str, Any]:
         """
@@ -139,7 +140,7 @@ class UserService:
 
         try:
             payload = jwt.decode(token, settings.get_secret_key(), algorithms=[settings.jwt_algorithm])
-            email: str = payload.get("sub")
+            email: str = payload.get("sub") 
             if email is None:
                 raise credentials_exception
             token_scopes = payload.get("scopes", [])
