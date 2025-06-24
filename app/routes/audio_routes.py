@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, UploadFile, File, Security
+from fastapi import APIRouter, Depends, status, UploadFile, File, Security, Query
 from typing import List
 
 from app.schemas.audio import AudioResponse
@@ -17,12 +17,13 @@ def transcribe_audio(
     audio_file: UploadFile = File(...),
     current_user: UserResponse = Security(provider.get_current_active_user, scopes=["user"]),
     audio_service: AudioService = Depends(provider.get_audio_service),
+    language_code: str = Query(default="en-US", description="Language code for transcription (e.g., 'en-US', 'es-ES')")
 ):
     """
     Converts an uploaded audio file to text, saves it, and returns the result.
     """
     user_id = str(current_user.id)
-    return audio_service.process_and_transcribe_audio(audio_file, user_id)
+    return audio_service.process_and_transcribe_audio(audio_file, user_id, language_code)
 
 @router.get("/{audio_id}", response_model=AudioResponse)
 def get_audio(

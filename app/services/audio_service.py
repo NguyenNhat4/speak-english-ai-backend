@@ -27,6 +27,12 @@ from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
+# Language mapping for Whisper
+WHISPER_LANGUAGE_MAPPING = {
+    "en-US": "english",
+    "vi-VN": "vietnamese",
+}
+
 # Import file utilities
 from app.utils.file_utils import (
     validate_audio_file,
@@ -54,7 +60,8 @@ class WhisperSpeechService(SpeechToTextService):
         """Transcribes audio using the Whisper model."""
         try:
             start_time = time.time()
-            result = self.model.transcribe(str(audio_file_path), language=language_code)
+            language = WHISPER_LANGUAGE_MAPPING.get(language_code, "english")  # Default to English
+            result = self.model.transcribe(str(audio_file_path), language=language)
             end_time = time.time()
             logger.info(f"Whisper transcription took {end_time - start_time:.2f} seconds")
             return result.get("text", "").strip()
@@ -143,20 +150,20 @@ class AudioService:
             
         return transcription
 
-    def process_and_transcribe_audio(self, file: UploadFile, user_id: str) -> dict:
+    def process_and_transcribe_audio(self, file: UploadFile, user_id: str, language_code: str = "en-US") -> dict:
         """
         Orchestrates the audio processing pipeline: transcription, saving, and cleanup.
         """
         try:
             # Step 1: Transcribe the audio file
-            transcription, temp_file_path = self.transcribe_audio(file)
+            transcription, temp_file_path = self.transcribe_audio(file, language_code)
             
             # Step 2: Check if transcription was successful
             if transcription and transcription.strip() and transcription != TranscriptionErrorMessages.EMPTY_TRANSCRIPTION.value:
                 try:
                     # Reset file pointer before saving
                     file.file.seek(0)
-                    audio_id = self.save_audio_file(file, user_id)
+                    audio_id = self.save_audio_file(file, user_id, language_code)
                     
                     cleanup_temp_file(temp_file_path)
                     
@@ -196,13 +203,14 @@ class AudioService:
     # FILE MANAGEMENT METHODS
     # =============================================================================
     
-    def save_audio_file(self, file: UploadFile, user_id: str) -> str:
+    def save_audio_file(self, file: UploadFile, user_id: str, language_code: str = "en-US") -> str:
         """
         Save an audio file to storage and create database record.
         
         Args:
             file (UploadFile): The audio file to save
             user_id (str): The ID of the user uploading the file
+            language_code (str): The language code of the audio file
             
         Returns:
             str: The ID of the saved audio record
@@ -219,7 +227,7 @@ class AudioService:
                 user_id=user_id,
                 filename=file.filename,
                 file_path=str(file_path),
-                language="en-US"  # Default language
+                language=language_code
             )
             
             # The audio_id is now part of the returned model from the repo
