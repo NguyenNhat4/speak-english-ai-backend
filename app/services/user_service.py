@@ -51,7 +51,7 @@ class UserService:
         
         # Combine user data with token for the response
         response_data = created_user.copy()
-        response_data.update(access_token)
+        response_data.update(access_token.model_dump())
         return response_data
 
     def login_user(self, email: str, password: str) -> Token:
