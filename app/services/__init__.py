@@ -9,13 +9,15 @@ from .ai_service import AIService
 from .conversation_service import ConversationService
 from .audio_service import AudioService
 from .tts_service import TTSService
+from .feedback_service import FeedbackService
 from .dependency_provider_service import DependencyProviderService
 
 __all__ = [
     "AIService",
     "ConversationService", 
     "AudioService",
-    "TTSService"
+    "TTSService",
+    "FeedbackService"
 ]
 
 provider = DependencyProviderService() 

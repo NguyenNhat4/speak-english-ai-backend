@@ -1,7 +1,13 @@
 from fastapi import FastAPI, Depends
 from fastapi.staticfiles import StaticFiles
-from app.routes import user_routes, image_description
-from app.routes import conversation_routes, audio_routes, message_routes, tts_routes
+from app.routes import (
+    user_controller,
+    image_description_controller,
+    conversation_controller,
+    audio_controller,
+    message_controller,
+    tts_controller
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.models import SecurityScheme
 from fastapi.security import OAuth2PasswordBearer
@@ -88,42 +94,42 @@ app.add_middleware(
 
 # Include routers
 app.include_router(
-    user_routes.router,
+    user_controller,
     prefix="/api/users",
     tags=["users"],
     responses={401: {"description": "Unauthorized"}}
 )
 
 app.include_router(
-    conversation_routes.router,
+    conversation_controller,
     prefix="/api",
     tags=["conversations"],
     responses={401: {"description": "Unauthorized"}}
 )
 
 app.include_router(
-    audio_routes.router,
+    audio_controller,
     prefix="/api",
     tags=["audio"],
     responses={401: {"description": "Unauthorized"}}
 )
 
 app.include_router(
-    message_routes.router,
+    message_controller,
     prefix="/api",
     tags=["messages"],
     responses={401: {"description": "Unauthorized"}}
 )
 
 app.include_router(
-    tts_routes.router,
+    tts_controller,
     prefix="/api",
     tags=["tts"],
     responses={401: {"description": "Unauthorized"}}
 )
 
 app.include_router(
-    image_description.router,
+    image_description_controller,
     prefix="/api",
     tags=["images"],
     responses={401: {"description": "Unauthorized"}}
