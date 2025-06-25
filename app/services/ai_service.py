@@ -11,7 +11,6 @@ import logging
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from fastapi import HTTPException
-import google.generativeai as genai
 
 from app.config.settings import settings
 from app.models.results.feedback_result import FeedbackResult
