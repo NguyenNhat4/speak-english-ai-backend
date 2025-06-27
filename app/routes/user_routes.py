@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, HTTPException, Security
+from fastapi import APIRouter, Depends, status, HTTPException, Security, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from typing import List
 
@@ -9,14 +9,14 @@ from app.services import provider
 router = APIRouter()
 
 @router.post("/register", response_model=UserRegisterResponse, status_code=status.HTTP_201_CREATED)
-def register_user(user_create: UserCreate, user_service: UserService = Depends(provider.get_user_service)):
+async def register_user(user_create: UserCreate, user_service: UserService = Depends(provider.get_user_service)) -> UserRegisterResponse:
     """
     Register a new user and return user info with an authentication token.
     """
     return user_service.register_user(user_create)
 
 @router.post("/login", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), user_service: UserService = Depends(provider.get_user_service)):
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), user_service: UserService = Depends(provider.get_user_service)):
     """
     OAuth2 compatible token login, get an access token for future requests.
     """
@@ -25,7 +25,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), user_service: UserSe
 @router.get("/me", response_model=UserResponse)
 async def get_user_profile(
     current_user: UserResponse = Security(provider.get_current_active_user, scopes=["user"])
-):
+) -> UserResponse:
     """
     Get current user's profile.
     """
@@ -43,7 +43,7 @@ async def update_user_profile(
     user_id = str(current_user.id)
     return user_service.update_user_profile(user_id, user_update)
 
-@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def delete_user_profile(
     current_user: UserResponse = Security(provider.get_current_active_user, scopes=["user"]),
     user_service: UserService = Depends(provider.get_user_service)
@@ -53,7 +53,7 @@ async def delete_user_profile(
     """
     user_id = str(current_user.id)
     user_service.delete_user(user_id)
-    return None
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 @router.get("/list", response_model=List[UserResponse])
 def get_users(
