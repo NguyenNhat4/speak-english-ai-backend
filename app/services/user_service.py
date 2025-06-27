@@ -9,7 +9,7 @@ from fastapi import HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordBearer, SecurityScopes
 from app.schemas.user import Token
 from app.repositories.user_repository import UserRepository
-from app.schemas.user import UserCreate, UserUpdate
+from app.schemas.user import UserCreate, UserUpdate, UserRegisterResponse
 from app.utils.security import hash_password, verify_password
 from app.utils.auth import create_access_token, oauth2_scheme
 from app.config.settings import settings
@@ -28,7 +28,7 @@ class UserService:
         """
         return self.user_repo.get_all_users(skip=skip, limit=limit)
 
-    def register_user(self, user_create: UserCreate) -> Dict[str, Any]:
+    def register_user(self, user_create: UserCreate) -> UserRegisterResponse:
         """
         Register a new user, hash their password, and create an access token.
         """
@@ -52,7 +52,7 @@ class UserService:
         # Combine user data with token for the response
         response_data = created_user.copy()
         response_data.update(access_token.model_dump())
-        return response_data
+        return UserRegisterResponse(**response_data)
 
     def login_user(self, email: str, password: str) -> Token:
         """
@@ -140,7 +140,7 @@ class UserService:
 
         try:
             payload = jwt.decode(token, settings.get_secret_key(), algorithms=[settings.jwt_algorithm])
-            email: str = payload.get("sub") 
+            email = payload.get("sub")
             if email is None:
                 raise credentials_exception
             token_scopes = payload.get("scopes", [])
