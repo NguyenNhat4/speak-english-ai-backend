@@ -6,7 +6,7 @@ from app.schemas.user import UserResponse
 from app.services.message_service import MessageService
 from app.services.user_service import UserService
 from app.services.orchestration_service import OrchestrationService
-from app.services import provider
+from app.services.dependency_provider_service import DependencyProviderService
 
 router = APIRouter(
     tags=["messages"]
@@ -16,9 +16,9 @@ router = APIRouter(
 async def add_message_and_get_response(
     conversation_id: str,
     audio_id: str,
-    current_user: UserResponse = Security(provider.get_current_active_user, scopes=["user"]),
+    current_user: UserResponse = Security(DependencyProviderService.get_current_active_user, scopes=["user"]),
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    orchestration_service: OrchestrationService = Depends(provider.get_orchestration_service),
+    orchestration_service: OrchestrationService = Depends(DependencyProviderService.get_orchestration_service),
 ):
     """
     Process a user's spoken message, add it to the conversation, and get an AI response.
@@ -32,7 +32,7 @@ async def add_message_and_get_response(
 @router.get("/conversations/{conversation_id}/messages", response_model=List[MessageResponse])
 def get_conversation_messages(
     conversation_id: str,
-    message_service: MessageService = Depends(provider.get_message_service)
+    message_service: MessageService = Depends(DependencyProviderService.get_message_service)
 ):
     """
     Get all messages for a specific conversation.
@@ -42,7 +42,7 @@ def get_conversation_messages(
 @router.get("/messages/{message_id}", response_model=MessageResponse)
 def get_message(
     message_id: str,
-    message_service: MessageService = Depends(provider.get_message_service)
+    message_service: MessageService = Depends(DependencyProviderService.get_message_service)
 ):
     """
     Get a specific message by its ID.
@@ -52,7 +52,7 @@ def get_message(
 @router.delete("/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_message(
     message_id: str,
-    message_service: MessageService = Depends(provider.get_message_service)
+    message_service: MessageService = Depends(DependencyProviderService.get_message_service)
 ):
     """
     Delete a message.
@@ -63,7 +63,7 @@ def delete_message(
 @router.get("/messages/{message_id}/feedback", response_model=dict)
 def get_message_feedback(
     message_id: str,
-    message_service: MessageService = Depends(provider.get_message_service)
+    message_service: MessageService = Depends(DependencyProviderService.get_message_service)
 ):
     """
     Get user-friendly feedback for a specific message.

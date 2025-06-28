@@ -5,7 +5,7 @@ from app.schemas.audio import AudioResponse
 from app.schemas.user import UserResponse
 from app.services.audio_service import AudioService
 from app.services.user_service import UserService
-from app.services import provider
+from app.services.dependency_provider_service import DependencyProviderService
 
 router = APIRouter(
     prefix="/audio",
@@ -15,8 +15,8 @@ router = APIRouter(
 @router.post("/transcribe", response_model=dict)
 def transcribe_audio(
     audio_file: UploadFile = File(...),
-    current_user: UserResponse = Security(provider.get_current_active_user, scopes=["user"]),
-    audio_service: AudioService = Depends(provider.get_audio_service),
+    current_user: UserResponse = Security(DependencyProviderService.get_current_active_user, scopes=["user"]),
+    audio_service: AudioService = Depends(DependencyProviderService.get_audio_service),
     language_code: str = Query(default="en-US", description="Language code for transcription (e.g., 'en-US', 'es-ES')")
 ):
     """
@@ -28,7 +28,7 @@ def transcribe_audio(
 @router.get("/{audio_id}", response_model=AudioResponse)
 def get_audio(
     audio_id: str,
-    audio_service: AudioService = Depends(provider.get_audio_service)
+    audio_service: AudioService = Depends(DependencyProviderService.get_audio_service)
 ):
     """
     Get audio file metadata.
@@ -38,8 +38,8 @@ def get_audio(
 @router.delete("/{audio_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_audio(
     audio_id: str,
-    current_user: UserResponse = Security(provider.get_current_active_user, scopes=["user"]),
-    audio_service: AudioService = Depends(provider.get_audio_service)
+    current_user: UserResponse = Security(DependencyProviderService.get_current_active_user, scopes=["user"]),
+    audio_service: AudioService = Depends(DependencyProviderService.get_audio_service)
 ):
     """
     Delete an audio file and its record.

@@ -17,7 +17,9 @@ __all__ = [
     "ConversationService", 
     "AudioService",
     "TTSService",
-    "FeedbackService"
+    "FeedbackService",
+    "DependencyProviderService"
 ]
 
-provider = DependencyProviderService() 
+# All methods are now static, so we export the class directly
+provider = DependencyProviderService 
