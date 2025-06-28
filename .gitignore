@@ -22,3 +22,16 @@ __pycache__/
 documents/
 ACTION_PLAN.md
 .cursorignore
+
+# VSCode configuration
+.vscode/
+
+# Log files
+logs/
+
+# Test results
+/coverage
+.pytest_cache/
+
+# Cursor
+.cursor/
