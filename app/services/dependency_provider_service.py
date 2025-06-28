@@ -124,4 +124,4 @@ class DependencyProviderService:
         if "admin" not in security_scopes.scopes:
             security_scopes.scopes.append("admin")
         user_data = user_service.get_user_from_token(token, security_scopes.scopes)
-        return UserResponse(**user_data) 
+        return UserResponse(**user_data)
