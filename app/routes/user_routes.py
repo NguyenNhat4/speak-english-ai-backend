@@ -27,7 +27,7 @@ async def get_user_profile(
     current_user: UserResponse = Security(DependencyProviderService.get_current_active_user, scopes=["user"])
 ) -> UserResponse:
     """
-    Get current user's profile.
+    Get the current user's profile information.
     """
     return current_user
 
@@ -38,10 +38,9 @@ async def update_user_profile(
     user_service: UserService = Depends(DependencyProviderService.get_user_service)
 ):
     """
-    Update current user's profile.
+    Update the current user's profile information.
     """
-    user_id = str(current_user.id)
-    return user_service.update_user_profile(user_id, user_update)
+    return user_service.update_user_profile(current_user.id, user_update)
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def delete_user_profile(
@@ -49,20 +48,18 @@ async def delete_user_profile(
     user_service: UserService = Depends(DependencyProviderService.get_user_service)
 ):
     """
-    Delete current user's profile (soft delete).
+    Delete the current user's account.
     """
-    user_id = str(current_user.id)
-    user_service.delete_user(user_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    user_service.delete_user(current_user.id)
 
-@router.get("/list", response_model=List[UserResponse])
-def get_users(
+@router.get("/all", response_model=List[UserResponse])
+async def get_all_users(
     skip: int = 0, 
     limit: int = 100, 
     user_service: UserService = Depends(DependencyProviderService.get_user_service), 
     admin_user: UserResponse = Security(DependencyProviderService.get_current_admin_user, scopes=["admin"])
 ):
     """
-    Get a list of users (for admin purposes).
+    Get all users. Admin access required.
     """
     return user_service.get_users(skip=skip, limit=limit) 

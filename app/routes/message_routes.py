@@ -9,11 +9,12 @@ from app.services.orchestration_service import OrchestrationService
 from app.services.dependency_provider_service import DependencyProviderService
 
 router = APIRouter(
+    prefix="/messages",
     tags=["messages"]
 )
 
-@router.post("/conversations/{conversation_id}/messages", response_model=Dict[str, Any])
-async def add_message_and_get_response(
+@router.post("/conversations/{conversation_id}/audio/{audio_id}", response_model=MessageResponse)
+def create_message_from_audio(
     conversation_id: str,
     audio_id: str,
     current_user: UserResponse = Security(DependencyProviderService.get_current_active_user, scopes=["user"]),
@@ -29,7 +30,7 @@ async def add_message_and_get_response(
         conversation_id, audio_id, user_id, background_tasks
     )
 
-@router.get("/conversations/{conversation_id}/messages", response_model=List[MessageResponse])
+@router.get("/conversations/{conversation_id}", response_model=List[MessageResponse])
 def get_conversation_messages(
     conversation_id: str,
     message_service: MessageService = Depends(DependencyProviderService.get_message_service)
@@ -39,7 +40,7 @@ def get_conversation_messages(
     """
     return message_service.get_messages_by_conversation(conversation_id)
 
-@router.get("/messages/{message_id}", response_model=MessageResponse)
+@router.get("/{message_id}", response_model=MessageResponse)
 def get_message(
     message_id: str,
     message_service: MessageService = Depends(DependencyProviderService.get_message_service)
@@ -49,7 +50,7 @@ def get_message(
     """
     return message_service.get_message(message_id)
 
-@router.delete("/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_message(
     message_id: str,
     message_service: MessageService = Depends(DependencyProviderService.get_message_service)
@@ -60,7 +61,7 @@ def delete_message(
     message_service.delete_message(message_id)
     return None
 
-@router.get("/messages/{message_id}/feedback", response_model=dict)
+@router.get("/{message_id}/feedback", response_model=dict)
 def get_message_feedback(
     message_id: str,
     message_service: MessageService = Depends(DependencyProviderService.get_message_service)
