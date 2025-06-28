@@ -4,19 +4,19 @@ from typing import List
 
 from app.schemas.user import UserCreate, UserResponse, UserUpdate, UserRegisterResponse, Token
 from app.services.user_service import UserService
-from app.services import provider
+from app.services.dependency_provider_service import DependencyProviderService
 
 router = APIRouter()
 
 @router.post("/register", response_model=UserRegisterResponse, status_code=status.HTTP_201_CREATED)
-async def register_user(user_create: UserCreate, user_service: UserService = Depends(provider.get_user_service)) -> UserRegisterResponse:
+async def register_user(user_create: UserCreate, user_service: UserService = Depends(DependencyProviderService.get_user_service)) -> UserRegisterResponse:
     """
     Register a new user and return user info with an authentication token.
     """
     return user_service.register_user(user_create)
 
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), user_service: UserService = Depends(provider.get_user_service)):
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), user_service: UserService = Depends(DependencyProviderService.get_user_service)):
     """
     OAuth2 compatible token login, get an access token for future requests.
     """
@@ -24,7 +24,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), user_service: 
 
 @router.get("/me", response_model=UserResponse)
 async def get_user_profile(
-    current_user: UserResponse = Security(provider.get_current_active_user, scopes=["user"])
+    current_user: UserResponse = Security(DependencyProviderService.get_current_active_user, scopes=["user"])
 ) -> UserResponse:
     """
     Get current user's profile.
@@ -34,8 +34,8 @@ async def get_user_profile(
 @router.put("/me", response_model=UserResponse)
 async def update_user_profile(
     user_update: UserUpdate, 
-    current_user: UserResponse = Security(provider.get_current_active_user, scopes=["user"]),
-    user_service: UserService = Depends(provider.get_user_service)
+    current_user: UserResponse = Security(DependencyProviderService.get_current_active_user, scopes=["user"]),
+    user_service: UserService = Depends(DependencyProviderService.get_user_service)
 ):
     """
     Update current user's profile.
@@ -45,8 +45,8 @@ async def update_user_profile(
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def delete_user_profile(
-    current_user: UserResponse = Security(provider.get_current_active_user, scopes=["user"]),
-    user_service: UserService = Depends(provider.get_user_service)
+    current_user: UserResponse = Security(DependencyProviderService.get_current_active_user, scopes=["user"]),
+    user_service: UserService = Depends(DependencyProviderService.get_user_service)
 ):
     """
     Delete current user's profile (soft delete).
@@ -59,8 +59,8 @@ async def delete_user_profile(
 def get_users(
     skip: int = 0, 
     limit: int = 100, 
-    user_service: UserService = Depends(provider.get_user_service), 
-    admin_user: UserResponse = Security(provider.get_current_admin_user, scopes=["admin"])
+    user_service: UserService = Depends(DependencyProviderService.get_user_service), 
+    admin_user: UserResponse = Security(DependencyProviderService.get_current_admin_user, scopes=["admin"])
 ):
     """
     Get a list of users (for admin purposes).

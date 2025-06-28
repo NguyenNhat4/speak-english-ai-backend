@@ -25,67 +25,82 @@ from fastapi.security import SecurityScopes
 from typing import Dict, Any
 
 class DependencyProviderService:
-    def get_audio_repository(self) -> AudioRepository:
+    @staticmethod
+    def get_audio_repository() -> AudioRepository:
         return AudioRepository()
 
-    def get_conversation_repository(self) -> ConversationRepository:
+    @staticmethod
+    def get_conversation_repository() -> ConversationRepository:
         return ConversationRepository()
 
-    def get_feedback_repository(self) -> FeedbackRepository:
+    @staticmethod
+    def get_feedback_repository() -> FeedbackRepository:
         return FeedbackRepository()
     
-    def get_message_repository(self) -> MessageRepository:
+    @staticmethod
+    def get_message_repository() -> MessageRepository:
         return MessageRepository()
 
-    def get_user_repository(self) -> UserRepository:
+    @staticmethod
+    def get_user_repository() -> UserRepository:
         return UserRepository()
         
-    def get_image_description_repository(self) -> ImageDescriptionRepository:
+    @staticmethod
+    def get_image_description_repository() -> ImageDescriptionRepository:
         return ImageDescriptionRepository()
 
-    def get_image_feedback_repository(self) -> ImageFeedbackRepository:
+    @staticmethod
+    def get_image_feedback_repository() -> ImageFeedbackRepository:
         return ImageFeedbackRepository()
 
-    def get_user_service(self) -> UserService:
-        return UserService(user_repo=self.get_user_repository())
+    @staticmethod
+    def get_user_service() -> UserService:
+        return UserService(user_repo=DependencyProviderService.get_user_repository())
 
-    def get_audio_service(self) -> AudioService:
-        return AudioService(audio_repo=self.get_audio_repository())
+    @staticmethod
+    def get_audio_service() -> AudioService:
+        return AudioService(audio_repo=DependencyProviderService.get_audio_repository())
 
-    def get_conversation_service(self) -> ConversationService:
+    @staticmethod
+    def get_conversation_service() -> ConversationService:
         return ConversationService(
-            conversation_repo=self.get_conversation_repository(),
-            message_repo=self.get_message_repository()
+            conversation_repo=DependencyProviderService.get_conversation_repository(),
+            message_repo=DependencyProviderService.get_message_repository()
         )
 
-    def get_ai_service(self) -> AIService:
+    @staticmethod
+    def get_ai_service() -> AIService:
         return AIService()
 
-    def get_message_service(self) -> MessageService:
+    @staticmethod
+    def get_message_service() -> MessageService:
         return MessageService(
-            message_repo=self.get_message_repository(),
-            feedback_repo=self.get_feedback_repository()
+            message_repo=DependencyProviderService.get_message_repository(),
+            feedback_repo=DependencyProviderService.get_feedback_repository()
         )
     
-    def get_tts_service(self) -> TTSService:
+    @staticmethod
+    def get_tts_service() -> TTSService:
         return TTSService(
-            message_repo=self.get_message_repository(),
-            conversation_repo=self.get_conversation_repository()
+            message_repo=DependencyProviderService.get_message_repository(),
+            conversation_repo=DependencyProviderService.get_conversation_repository()
         )
         
-    def get_image_description_service(self) -> ImageDescriptionService:
+    @staticmethod
+    def get_image_description_service() -> ImageDescriptionService:
         return ImageDescriptionService(
-            image_desc_repo=self.get_image_description_repository(),
-            image_feedback_repo=self.get_image_feedback_repository()
+            image_desc_repo=DependencyProviderService.get_image_description_repository(),
+            image_feedback_repo=DependencyProviderService.get_image_feedback_repository()
         )
 
-    def get_orchestration_service(self) -> OrchestrationService:
+    @staticmethod
+    def get_orchestration_service() -> OrchestrationService:
         return OrchestrationService(
-            conversation_service=self.get_conversation_service(),
-            ai_service=self.get_ai_service(),
-            audio_repo=self.get_audio_repository(),
-            message_repo=self.get_message_repository(),
-            feedback_repo=self.get_feedback_repository()
+            conversation_service=DependencyProviderService.get_conversation_service(),
+            ai_service=DependencyProviderService.get_ai_service(),
+            audio_repo=DependencyProviderService.get_audio_repository(),
+            message_repo=DependencyProviderService.get_message_repository(),
+            feedback_repo=DependencyProviderService.get_feedback_repository()
         )
 
     @staticmethod
