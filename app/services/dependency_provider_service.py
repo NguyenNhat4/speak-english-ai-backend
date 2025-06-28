@@ -18,6 +18,7 @@ from app.repositories.message_repository import MessageRepository
 from app.repositories.user_repository import UserRepository
 from app.repositories.image_description_repository import ImageDescriptionRepository
 from app.repositories.image_feedback_repository import ImageFeedbackRepository
+from app.schemas.user import UserResponse
 from app.utils.auth import oauth2_scheme
 from fastapi import Depends
 from fastapi.security import SecurityScopes
@@ -87,21 +88,25 @@ class DependencyProviderService:
             feedback_repo=self.get_feedback_repository()
         )
 
+    @staticmethod
     def get_current_active_user(
-        self,
         security_scopes: SecurityScopes,
         token: str = Depends(oauth2_scheme)
-    ) -> Dict[str, Any]:
-        user_service = UserService(user_repo=self.get_user_repository())
-        return user_service.get_user_from_token(token, security_scopes.scopes)
+    ) -> UserResponse:
+        user_repo = UserRepository()
+        user_service = UserService(user_repo=user_repo)
+        user_data = user_service.get_user_from_token(token, security_scopes.scopes)
+        return UserResponse(**user_data)
 
+    @staticmethod
     def get_current_admin_user(
-        self,
         security_scopes: SecurityScopes,
         token: str = Depends(oauth2_scheme)
-    ) -> Dict[str, Any]:
-        user_service = UserService(user_repo=self.get_user_repository())
+    ) -> UserResponse:
+        user_repo = UserRepository()
+        user_service = UserService(user_repo=user_repo)
         # Enforce "admin" scope
         if "admin" not in security_scopes.scopes:
             security_scopes.scopes.append("admin")
-        return user_service.get_user_from_token(token, security_scopes.scopes) 
+        user_data = user_service.get_user_from_token(token, security_scopes.scopes)
+        return UserResponse(**user_data) 
