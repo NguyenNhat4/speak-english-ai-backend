@@ -18,20 +18,6 @@ __pycache__/
 .cursor
 
 # please dont remove this , i dont want to  commit below files and folders.
-.cursor/rules/
+.cursor/
 documents/
 ACTION_PLAN.md
-.cursorignore
-
-# VSCode configuration
-.vscode/
-
-# Log files
-logs/
-
-# Test results
-/coverage
-.pytest_cache/
-
-# Cursor
-.cursor/

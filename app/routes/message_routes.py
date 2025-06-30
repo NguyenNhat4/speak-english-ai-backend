@@ -14,7 +14,7 @@ router = APIRouter(
 )
 
 @router.post("/conversations/{conversation_id}/audio/{audio_id}", response_model=MessageResponse)
-def create_message_from_audio(
+async def create_message_from_audio(
     conversation_id: str,
     audio_id: str,
     current_user: UserResponse = Security(DependencyProviderService.get_current_active_user, scopes=["user"]),
