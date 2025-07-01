@@ -4,6 +4,7 @@ from typing import Dict, Any
 
 from app.services.tts_service import TTSService
 from app.services.dependency_provider_service import DependencyProviderService
+from app.schemas.tts import VoiceContextResponse
 
 router = APIRouter(
     prefix="/tts",
@@ -20,7 +21,7 @@ async def get_speech_for_message(
     """
     return await tts_service.get_speech_for_message(message_id)
 
-@router.get("/voice-context/{message_id}", response_model=dict)
+@router.get("/voice-context/{message_id}", response_model=VoiceContextResponse)
 def get_voice_context(
     message_id: str,
     tts_service: TTSService = Depends(DependencyProviderService.get_tts_service)

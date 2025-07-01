@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, status, BackgroundTasks, Security
 from typing import List, Dict, Any
 
-from app.schemas.message import MessageResponse
+from app.schemas.message import MessageResponse, UserAndAIResponse
+from app.schemas.feedback import MessageFeedbackResponse
 from app.schemas.user import UserResponse
 from app.services.message_service import MessageService
 from app.services.user_service import UserService
@@ -13,7 +14,7 @@ router = APIRouter(
     tags=["messages"]
 )
 
-@router.post("/conversations/{conversation_id}/audio/{audio_id}", response_model=MessageResponse)
+@router.post("/conversations/{conversation_id}/audio/{audio_id}", response_model=UserAndAIResponse)
 async def create_message_from_audio(
     conversation_id: str,
     audio_id: str,
@@ -61,7 +62,7 @@ def delete_message(
     message_service.delete_message(message_id)
     return None
 
-@router.get("/{message_id}/feedback", response_model=dict)
+@router.get("/{message_id}/feedback", response_model=MessageFeedbackResponse)
 def get_message_feedback(
     message_id: str,
     message_service: MessageService = Depends(DependencyProviderService.get_message_service)
