@@ -268,13 +268,13 @@ class ConversationService:
                 detail=f"Failed to retrieve conversations: {str(e)}"
             )
     
-    def get_conversation_by_id(self, conversation_id: str) -> Optional[ConversationResponse]:
+    def get_conversation_by_id(self, conversation_id: str) -> ConversationResponse:
         """
         Retrieve a single conversation by its ID.
         """
         conversation = self.conversation_repo.get_conversation_by_id(conversation_id)
         if not conversation:
-            return None
+            raise HTTPException(status_code=404, detail="Conversation not found")
         return ConversationResponse.model_validate(conversation)
 
     def update_conversation(self, conversation_id: str, update_data: ConversationUpdate) -> Optional[ConversationResponse]:
