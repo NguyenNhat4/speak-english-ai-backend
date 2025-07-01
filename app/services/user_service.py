@@ -7,7 +7,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 from fastapi import HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordBearer, SecurityScopes
-from app.schemas.user import Token
+from app.schemas.user import Token, UserResponse
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import UserCreate, UserUpdate, UserRegisterResponse
 from app.utils.security import hash_password, verify_password
@@ -22,11 +22,12 @@ class UserService:
     def __init__(self, user_repo: UserRepository):
         self.user_repo = user_repo
 
-    def get_users(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_users(self, skip: int = 0, limit: int = 100) -> List[UserResponse]:
         """
         Get all users.
         """
-        return self.user_repo.get_all_users(skip=skip, limit=limit)
+        users = self.user_repo.get_all_users(skip=skip, limit=limit)
+        return [UserResponse.model_validate(user) for user in users]
 
     def register_user(self, user_create: UserCreate) -> UserRegisterResponse:
         """
@@ -52,23 +53,24 @@ class UserService:
         # Combine user data with token for the response
         response_data = created_user.copy()
         response_data.update(access_token.model_dump())
-        return UserRegisterResponse(**response_data)
+        return UserRegisterResponse.model_validate(response_data)
 
     def login_user(self, email: str, password: str) -> Token:
         """
         Authenticate a user and return an access token.
         """
-        user = self.user_repo.get_user_by_email(email)
-        if not user or not verify_password(password, user['password']):
+        user_data = self.user_repo.get_user_by_email(email)
+        if not user_data or not verify_password(password, user_data['password']):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        return self.create_auth_token(user['email'], user['role'])
+        user = UserResponse.model_validate(user_data)
+        return self.create_auth_token(user.email, user.role)
 
-    def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
+    def get_user_by_id(self, user_id: str) -> Optional[UserResponse]:
         """
         Get a user by their ID.
         """
@@ -78,22 +80,22 @@ class UserService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found"
             )
-        return user
+        return UserResponse.model_validate(user)
 
-    def update_user_profile(self, user_id: str, user_update: UserUpdate) -> Optional[Dict[str, Any]]:
+    def update_user_profile(self, user_id: str, user_update: UserUpdate) -> Optional[UserResponse]:
         """
         Update a user's profile.
         """
-        update_data = user_update.dict(exclude_unset=True)
+        update_data = user_update.model_dump(exclude_unset=True)
         updated_user = self.user_repo.update_user(user_id, update_data)
         if not updated_user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found"
             )
-        return updated_user
+        return UserResponse.model_validate(updated_user)
 
-    def delete_user(self, user_id: str) -> Optional[Dict[str, Any]]:
+    def delete_user(self, user_id: str) -> Optional[UserResponse]:
         """
         Soft delete a user.
         """
@@ -103,7 +105,7 @@ class UserService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found"
             )
-        return deleted_user
+        return UserResponse.model_validate(deleted_user)
 
     def create_auth_token(self, email: str, role: str = "user") -> Token:
         """
@@ -123,7 +125,7 @@ class UserService:
             scope=" ".join(scopes)
         )
 
-    def get_user_from_token(self, token: Optional[str], required_scopes: List[str] = []) -> Dict[str, Any]:
+    def get_user_from_token(self, token: Optional[str], required_scopes: List[str] = []) -> UserResponse:
         """
         Decode the JWT token, validate scopes, and return the user.
         This is a regular method, not a dependency.
@@ -153,8 +155,8 @@ class UserService:
         except JWTError:
             raise credentials_exception
         
-        user = self.user_repo.get_user_by_email(email)
-        if user is None:
+        user_data = self.user_repo.get_user_by_email(email)
+        if user_data is None:
             raise credentials_exception
             
         for scope in required_scopes:
@@ -165,4 +167,4 @@ class UserService:
                     headers={"WWW-Authenticate": authenticate_value},
                 )
         
-        return user 
+        return UserResponse.model_validate(user_data) 

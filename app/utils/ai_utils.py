@@ -12,6 +12,7 @@ from PIL import Image
 
 from app.config.settings import settings
 from app.utils.voice_utils import pick_suitable_voice_name
+from app.schemas.conversation import ConversationResponse
 
 logger = logging.getLogger(__name__)
 
@@ -175,15 +176,15 @@ def generate_image_description(image_path: str, prompt: str) -> str:
         logger.error(f"Failed to generate image description for {image_path}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate image description.")
 
-def build_conversation_prompt(conversation: Dict[str, Any], conversation_history: str) -> str:
+def build_conversation_prompt(conversation: ConversationResponse, conversation_history: str) -> str:
     """
     Builds the prompt for the conversation given the context and history.
     """
     return f"""
         You are an AI assistant helping a user practice their English.
-        Your role is: {conversation['ai_role']}.
-        The user's role is: {conversation['user_role']}.
-        The conversation scenario is: {conversation['situation']}.
+        Your role is: {conversation.ai_role}.
+        The user's role is: {conversation.user_role}.
+        The conversation scenario is: {conversation.situation}.
         
         Please respond in English, staying in your role. Be natural and engaging.
         

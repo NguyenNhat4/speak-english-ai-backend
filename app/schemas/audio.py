@@ -129,3 +129,9 @@ class AnalysisResponse(BaseModel):
                 "feedback_id": "6042d36e9a1f3c2e8c9b4d8f"
             }
         }
+
+class ProcessTranscriptionResponse(BaseModel):
+    audio_id: Optional[str] = None
+    transcription: str
+    success: bool
+    warning: Optional[str] = None

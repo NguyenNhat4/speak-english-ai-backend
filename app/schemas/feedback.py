@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, HttpUrl
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from bson import ObjectId
+from pydantic import validator
 
 class GrammarIssue(BaseModel):
     """Schema for a grammar issue."""
@@ -77,3 +78,25 @@ class FeedbackRequest(BaseModel):
     text: str = Field(..., description="User text to analyze")
     reference_text: Optional[str] = Field(None, description="Reference text to compare against")
     audio_path: Optional[str] = Field(None, description="Path to audio recording if available")
+
+class MessageFeedbackContent(BaseModel):
+    id: str = Field(alias="_id")
+    user_feedback: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat(),
+            ObjectId: lambda v: str(v)
+        }
+
+    @validator("id", pre=True)
+    def convert_objectid_to_str(cls, v):
+        if isinstance(v, ObjectId):
+            return str(v)
+        return v
+
+class MessageFeedbackResponse(BaseModel):
+    user_feedback: Optional[MessageFeedbackContent] = None
+    is_ready: bool

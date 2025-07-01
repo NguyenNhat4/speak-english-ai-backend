@@ -15,7 +15,7 @@ from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
 from app.models.conversation import Conversation
 from app.models.message import Message
-from app.schemas.conversation import ConversationCreate, ConversationResponse, ConversationUpdate
+from app.schemas.conversation import ConversationCreate, ConversationResponse, ConversationUpdate, ConversationContext
 from app.schemas.message import MessageResponse
 from app.utils.ai_utils import refine_conversation_context
 
@@ -93,33 +93,25 @@ class ConversationService:
             
             conversation_id = str(conversation["_id"])
             
+            # Prepare response data
+            conversation_obj = self.get_conversation_by_id(conversation_id)
+            if not conversation_obj:
+                raise HTTPException(status_code=404, detail="Failed to format conversation response")
+
             # Create initial AI message using repository
             initial_message = self.message_repo.create_message(
                 conversation_id=conversation_id,
                 sender="ai",
                 content=refined_context["response"]
             )
-            
-            # Prepare response data
-            conversation_data = self._format_conversation_response(ObjectId(conversation_id))
-            if not conversation_data:
-                raise HTTPException(status_code=404, detail="Failed to format conversation response")
 
-            # Convert to message object for formatting
-            message_obj = Message(
-                conversation_id=ObjectId(conversation_id),
-                sender="ai",
-                content=refined_context["response"]
-            )
-            message_obj._id = ObjectId(initial_message["_id"])
-            message_obj.timestamp = initial_message["timestamp"]
-            message_data = self._format_message_response(message_obj, ObjectId(conversation_id))
+            message_obj = MessageResponse.model_validate(initial_message)
             
             self.logger.info(f"Successfully created conversation {conversation_id} for user {user_id}")
             
             return {
-                "conversation": ConversationResponse(**conversation_data),
-                "initial_message": MessageResponse(**message_data)
+                "conversation": conversation_obj,
+                "initial_message": message_obj
             }
             
         except Exception as e:
@@ -129,7 +121,7 @@ class ConversationService:
                 detail=f"Failed to create conversation: {str(e)}"
             )
     
-    def get_conversation_context(self, conversation_id: str) -> Dict[str, Any]:
+    def get_conversation_context(self, conversation_id: str) -> ConversationContext:
         """
         Retrieve conversation context and message history.
         
@@ -137,22 +129,22 @@ class ConversationService:
             conversation_id (str): The ID of the conversation to retrieve
             
         Returns:
-            Dict[str, Any]: Conversation data and message history
+            ConversationContext: Conversation data and message history
             
         Raises:
             HTTPException: If conversation not found or retrieval fails
         """
         try:
             # The repository now handles ObjectId validation
-            conversation = self.conversation_repo.get_conversation_by_id(conversation_id)
-            if not conversation:
+            conversation_data = self.conversation_repo.get_conversation_by_id(conversation_id)
+            if not conversation_data:
                 raise HTTPException(
                     status_code=404,
                     detail="Conversation not found"
                 )
             
             # Fetch messages for the conversation using repository
-            messages = self.message_repo.get_messages_by_conversation(conversation_id)
+            messages_data = self.message_repo.get_messages_by_conversation(conversation_id)
             
             # Format message history for AI context
             history = [
@@ -160,16 +152,16 @@ class ConversationService:
                     "role": "user" if msg["sender"] == "user" else "model",
                     "parts": [msg["content"]]
                 }
-                for msg in messages
+                for msg in messages_data
             ]
             
-            self.logger.debug(f"Retrieved conversation context for {conversation_id} with {len(messages)} messages")
+            self.logger.debug(f"Retrieved conversation context for {conversation_id} with {len(messages_data)} messages")
             
-            return {
-                "conversation": conversation,
-                "messages": messages,
-                "history": history
-            }
+            return ConversationContext(
+                conversation=ConversationResponse.model_validate(conversation_data),
+                messages=[MessageResponse.model_validate(msg) for msg in messages_data],
+                history=history
+            )
             
         except HTTPException:
             raise
@@ -244,7 +236,7 @@ class ConversationService:
                 detail=f"Validation failed: {str(e)}"
             )
     
-    def get_user_conversations(self, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_user_conversations(self, user_id: str, limit: int = 50) -> List[ConversationResponse]:
         """
         Retrieve conversations for a specific user.
         
@@ -253,7 +245,7 @@ class ConversationService:
             limit (int): Maximum number of conversations to return
             
         Returns:
-            List[Dict[str, Any]]: List of user conversations
+            List[ConversationResponse]: List of user conversations
             
         Raises:
             HTTPException: If retrieval fails
@@ -265,16 +257,7 @@ class ConversationService:
                 limit=limit
             )
             
-            # Format conversations for response
-            formatted_conversations = []
-            for conv in conversations:
-                conv["id"] = str(conv["_id"])
-                conv["user_id"] = str(conv["user_id"])
-                del conv["_id"]
-                formatted_conversations.append(conv)
-            
-            self.logger.debug(f"Retrieved {len(formatted_conversations)} conversations for user {user_id}")
-            return formatted_conversations
+            return [ConversationResponse.model_validate(conv) for conv in conversations]
             
         except HTTPException:
             raise
@@ -285,72 +268,24 @@ class ConversationService:
                 detail=f"Failed to retrieve conversations: {str(e)}"
             )
     
-    def _format_conversation_response(self, conversation_id: ObjectId) -> Optional[Dict[str, Any]]:
-        """
-        Format a conversation for API response.
-        
-        Args:
-            conversation_id: The ID of the conversation
-            
-        Returns:
-            Formatted conversation data or None
-        """
-        conversation = self.conversation_repo.get_conversation_by_id(str(conversation_id))
-        if not conversation:
-            return None
-            
-        return {
-            "id": str(conversation["_id"]),
-            "user_id": str(conversation["user_id"]),
-            "user_role": conversation["user_role"],
-            "ai_role": conversation["ai_role"],
-            "situation": conversation["situation"],
-            "started_at": conversation["started_at"].isoformat(),
-            "ended_at": conversation["ended_at"].isoformat() if conversation.get("ended_at") else None,
-            "voice_type": conversation.get("voice_type")
-        }
-    
-    def _format_message_response(
-        self, 
-        message: Message, 
-        conversation_id: ObjectId
-    ) -> Dict[str, Any]:
-        """
-        Format message data for API response.
-        
-        Args:
-            message (Message): The message object
-            conversation_id (ObjectId): The conversation ID
-            
-        Returns:
-            Dict[str, Any]: Formatted message data
-        """
-        return {
-            "id": str(message._id),
-            "conversation_id": str(conversation_id),
-            "sender": message.sender,
-            "content": message.content,
-            "timestamp": message.timestamp.isoformat()
-        }
-
-    def get_conversation_by_id(self, conversation_id: str) -> Optional[Dict[str, Any]]:
+    def get_conversation_by_id(self, conversation_id: str) -> Optional[ConversationResponse]:
         """
         Retrieve a single conversation by its ID.
         """
         conversation = self.conversation_repo.get_conversation_by_id(conversation_id)
         if not conversation:
-            raise HTTPException(status_code=404, detail="Conversation not found")
-        return conversation
+            return None
+        return ConversationResponse.model_validate(conversation)
 
-    def update_conversation(self, conversation_id: str, update_data: ConversationUpdate) -> Optional[Dict[str, Any]]:
+    def update_conversation(self, conversation_id: str, update_data: ConversationUpdate) -> Optional[ConversationResponse]:
         """
         Update conversation metadata.
         """
-        update_dict = update_data.dict(exclude_unset=True)
+        update_dict = update_data.model_dump(exclude_unset=True)
         updated_conversation = self.conversation_repo.update(conversation_id, update_dict)
         if not updated_conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
-        return updated_conversation
+        return ConversationResponse.model_validate(updated_conversation)
 
     def delete_conversation(self, conversation_id: str):
         """

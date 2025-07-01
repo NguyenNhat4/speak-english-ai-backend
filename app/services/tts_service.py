@@ -15,6 +15,7 @@ from app.config.settings import settings
 from app.repositories.message_repository import MessageRepository
 from app.repositories.conversation_repository import ConversationRepository
 from app.utils.voice_utils import pick_suitable_voice_name
+from app.schemas.tts import VoiceContextResponse, LatestAIMessage
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +156,7 @@ class TTSService:
             speed=1.3
         )
 
-    def get_voice_context(self, message_id: str) -> dict:
+    def get_voice_context(self, message_id: str) -> VoiceContextResponse:
         """
         Retrieves voice context (voice type and latest AI message) for a conversation.
         """
@@ -173,20 +174,16 @@ class TTSService:
         voice_type = conversation.get("voice_type", "hm_omega")
         
         ai_messages = [msg for msg in messages if msg.get("sender") == "ai"]
-        latest_ai_message_data = None
+        latest_ai_message_obj = None
         
         if ai_messages:
-            latest_msg = ai_messages[-1]
-            latest_ai_message_data = {
-                "id": str(latest_msg["_id"]),
-                "content": latest_msg.get("content", ""),
-                "timestamp": latest_msg.get("timestamp")
-            }
+            latest_msg_data = ai_messages[-1]
+            latest_ai_message_obj = LatestAIMessage.model_validate(latest_msg_data)
         
-        return {
-            "voice_type": voice_type,
-            "latest_ai_message": latest_ai_message_data,
-        }
+        return VoiceContextResponse(
+            voice_type=voice_type,
+            latest_ai_message=latest_ai_message_obj,
+        )
     
     async def generate_speech_streaming(
         self,
