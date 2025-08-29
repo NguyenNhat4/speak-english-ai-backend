@@ -4,7 +4,7 @@ This repository contains the backend code for the Speak AI application, a platfo
 
 ## Key Features
 
-- **Speech Transcription**: Transcribes user speech using local speech recognition.
+- **Speech Transcription**: Transcribes user speech using  OpenAI AI models ( .
 - **Grammar & Vocabulary Feedback**: Analyzes speech and provides detailed feedback on grammar and vocabulary.
 - **Spaced Repetition Practice**: Implements a spaced repetition algorithm for effective language learning.
 - **Conversation Context**: Considers conversation context when providing feedback.
