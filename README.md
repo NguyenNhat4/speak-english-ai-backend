@@ -1,13 +1,13 @@
 # Speak AI Backend
 
-This repository contains the backend code for the Speak AI application, a platform designed to help users improve their English speaking skills through feedback and practice.
+This repository contains the backend code for the Speak AI application, a platform designed to help users improve their English speaking skills through hand-on practices and instant feedbacks.
 
 ## Key Features
 
-- **Speech Transcription**: Transcribes user speech using local speech recognition
-- **Grammar & Vocabulary Feedback**: Analyzes speech and provides detailed feedback on grammar and vocabulary
-- **Spaced Repetition Practice**: Implements a spaced repetition algorithm for effective language learning
-- **Conversation Context**: Considers conversation context when providing feedback
+- **Speech Transcription**: Transcribes user speech using local speech recognition.
+- **Grammar & Vocabulary Feedback**: Analyzes speech and provides detailed feedback on grammar and vocabulary.
+- **Spaced Repetition Practice**: Implements a spaced repetition algorithm for effective language learning.
+- **Conversation Context**: Considers conversation context when providing feedback.
 
 ## Architecture
 
